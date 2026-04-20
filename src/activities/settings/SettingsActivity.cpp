@@ -3,10 +3,7 @@
 #include <GfxRenderer.h>
 #include <Logging.h>
 
-#include <algorithm>
-#include <cstring>
-
-#include "AppVersion.h"
+#include "BookFusionSettingsActivity.h"
 #include "ButtonRemapActivity.h"
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"

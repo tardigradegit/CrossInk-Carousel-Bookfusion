@@ -18,8 +18,9 @@
 #include <limits>
 #include <memory>
 
-#include "../settings/KOReaderSettingsActivity.h"
-#include "BookStatsActivity.h"
+#include "BookFusionBookIdStore.h"
+#include "BookFusionSyncActivity.h"
+#include "BookFusionTokenStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "EpubReaderAutoPageTurnIntervalActivity.h"
@@ -857,27 +858,28 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     }
     case EpubReaderMenuActivity::MenuAction::SYNC: {
       if (BF_TOKEN_STORE.hasToken() && BookFusionBookIdStore::loadBookId(epub->getPath().c_str()) != 0) {
-        const int currentPage = section ? section->currentPage : nextPageNumber;
-        const int totalPages = section ? section->pageCount : cachedChapterTotalPageCount;
-        startActivityForResult(
-            std::make_unique<BookFusionSyncActivity>(renderer, mappedInput, epub, epub->getPath(),
-                                                     currentSpineIndex, currentPage, totalPages),
-            [this](const ActivityResult& result) {
-              if (!result.isCancelled) {
-                const auto& sync = std::get<SyncResult>(result.data);
-                if (currentSpineIndex != sync.spineIndex ||
-                    (section && section->currentPage != sync.page)) {
-                  RenderLock lock(*this);
-                  currentSpineIndex = sync.spineIndex;
-                  nextPageNumber = sync.page;
-                  cachedChapterTotalPageCount = 0;  // Prevent rescaling sync page
-                  pendingPageJump.reset();
-                  saveProgress(currentSpineIndex, nextPageNumber, cachedChapterTotalPageCount);
-                  section.reset();
-                }
-              }
-            });
-      } else if (KOREADER_STORE.hasCredentials()) {
+        const int currentPage = section ? section->currentPage : 0;
+        const int totalPages = section ? section->pageCount : 0;
+
+        auto applySyncResult = [this](const ActivityResult& result) {
+          if (!result.isCancelled) {
+            const auto& sync = std::get<SyncResult>(result.data);
+            if (currentSpineIndex != sync.spineIndex || (section && section->currentPage != sync.page)) {
+              RenderLock lock(*this);
+              currentSpineIndex = sync.spineIndex;
+              nextPageNumber = sync.page;
+              section.reset();
+            }
+          }
+        };
+
+        startActivityForResult(std::make_unique<BookFusionSyncActivity>(renderer, mappedInput, epub, epub->getPath(),
+                                                                        currentSpineIndex, currentPage, totalPages),
+                               applySyncResult);
+        break;
+      }
+
+      if (KOREADER_STORE.hasCredentials()) {
         const int currentPage = section ? section->currentPage : nextPageNumber;
         const int totalPages = section ? section->pageCount : cachedChapterTotalPageCount;
         std::optional<uint16_t> paragraphIndex;
@@ -889,7 +891,6 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
           }
         }
 
-        // Pre-compute local KO position and chapter name while Epub is still in RAM.
         CrossPointPosition localPos = {currentSpineIndex, currentPage, totalPages};
         if (paragraphIndex.has_value()) {
           localPos.paragraphIndex = *paragraphIndex;
@@ -900,8 +901,6 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
         std::string localChapterName = (tocIdx >= 0) ? epub->getTocItem(tocIdx).title : "";
         const std::string savedEpubPath = epub->getPath();
 
-        // Persist current position so the reader resumes at the right page on return.
-        // goToReader() depends on this file, so abort the sync if the write fails.
         if (!saveProgress(currentSpineIndex, currentPage, totalPages)) {
           LOG_ERR("KOSync", "Aborting sync because current progress could not be saved");
           pendingSyncSaveError = true;
@@ -909,9 +908,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
           return;
         }
 
-        // Release the heavy Section now. Keep Epub alive until onExit(), which still
-        // needs it for stats/cache cleanup before the sync activity starts.
-        LOG_DBG("KOSync", "Releasing section for sync (heap before: %u)", (unsigned)ESP.getFreeHeap());
+        LOG_DBG("KOSync", "Releasing epub for sync (heap before: %u)", (unsigned)ESP.getFreeHeap());
         {
           RenderLock lock(*this);
           if (section) {

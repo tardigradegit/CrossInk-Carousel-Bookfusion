@@ -4,9 +4,8 @@
 #include <Logging.h>
 #include <ObfuscationUtils.h>
 
-#include "../../src/JsonSettingsIO.h"
+#include "BookFusionJsonIO.h"
 
-// Initialise static singleton instance
 BookFusionTokenStore BookFusionTokenStore::instance;
 
 namespace {
@@ -15,7 +14,7 @@ constexpr char BF_FILE_JSON[] = "/.crosspoint/bookfusion.json";
 
 bool BookFusionTokenStore::saveToFile() const {
   Storage.mkdir("/.crosspoint");
-  return JsonSettingsIO::saveBookFusion(*this, BF_FILE_JSON);
+  return BookFusionJsonIO::save(*this, BF_FILE_JSON);
 }
 
 bool BookFusionTokenStore::loadFromFile() {
@@ -30,7 +29,7 @@ bool BookFusionTokenStore::loadFromFile() {
     return false;
   }
 
-  return JsonSettingsIO::loadBookFusion(*this, json.c_str());
+  return BookFusionJsonIO::load(*this, json.c_str());
 }
 
 void BookFusionTokenStore::setToken(const std::string& token) {

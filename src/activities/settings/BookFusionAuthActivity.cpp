@@ -18,8 +18,11 @@
 
 namespace {
 constexpr int MAX_NETWORK_RETRIES = 3;
+// Only re-render the countdown every 10 s to limit E-ink refreshes.
 constexpr unsigned long TIMER_REFRESH_INTERVAL_MS = 10000;
 constexpr int QR_CODE_SIZE = 198;
+// User-facing activation URL. The OAuth response may return a different
+// verification_uri; always display the short, memorable URL instead.
 constexpr const char* DEVICE_ACTIVATION_URL = "https://bookfusion.com/device";
 }  // namespace
 
@@ -159,6 +162,8 @@ void BookFusionAuthActivity::onEnter() {
 
 void BookFusionAuthActivity::onExit() {
   Activity::onExit();
+  // Leave WiFi on — BookFusionSettingsActivity called from settings which may need it.
+  // The caller (SettingsActivity) doesn't do network ops, so we let the main flow handle WiFi.
 }
 
 void BookFusionAuthActivity::loop() {
@@ -178,6 +183,7 @@ void BookFusionAuthActivity::loop() {
 
     const unsigned long now = millis();
 
+    // Check expiry
     if (now - pollExpireAt < 0x80000000UL && now >= pollExpireAt) {
       {
         RenderLock lock(*this);
@@ -187,11 +193,13 @@ void BookFusionAuthActivity::loop() {
       return;
     }
 
+    // Refresh countdown display every TIMER_REFRESH_INTERVAL_MS
     if (now - lastTimerRefresh >= TIMER_REFRESH_INTERVAL_MS) {
       lastTimerRefresh = now;
       requestUpdate();
     }
 
+    // Time to poll?
     if (now >= nextPollAt) {
       doPoll();
     }
@@ -259,6 +267,7 @@ void BookFusionAuthActivity::render(RenderLock&&) {
     return;
   }
 
+  // Error states: EXPIRED, DENIED, FAILED
   const char* msg = tr(STR_BF_AUTH_FAILED);
   if (state == EXPIRED) msg = tr(STR_BF_CODE_EXPIRED);
   if (state == DENIED) msg = tr(STR_BF_AUTH_DENIED);

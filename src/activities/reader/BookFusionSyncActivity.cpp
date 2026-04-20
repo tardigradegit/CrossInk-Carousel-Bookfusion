@@ -23,6 +23,8 @@ void wifiOff() {
   delay(100);
 }
 
+// Convert a BookFusion position (0-100 percentage) to CrossPoint using the KOReader
+// percentage mapper. This avoids duplicating the spine-lookup logic.
 CrossPointPosition bfToCrossPoint(const std::shared_ptr<Epub>& epub, const BookFusionPosition& bf,
                                   int currentSpineIndex, int totalPagesInCurrentSpine) {
   KOReaderPosition koPos;
@@ -31,6 +33,7 @@ CrossPointPosition bfToCrossPoint(const std::shared_ptr<Epub>& epub, const BookF
   return ProgressMapper::toCrossPoint(epub, koPos, currentSpineIndex, totalPagesInCurrentSpine);
 }
 
+// Convert CrossPoint position to BookFusion format.
 BookFusionPosition crossPointToBf(const std::shared_ptr<Epub>& epub, const CrossPointPosition& pos) {
   const KOReaderPosition koPos = ProgressMapper::toKOReader(epub, pos);
   const int spineCount = epub->getSpineItemsCount();
@@ -89,15 +92,18 @@ void BookFusionSyncActivity::performSync() {
     return;
   }
 
+  // Convert remote BF position → CrossPoint
   hasRemoteProgress = true;
   remoteCrossPoint = bfToCrossPoint(epub, remotePosition, currentSpineIndex, totalPagesInSpine);
 
+  // Compute local position in BF format for display
   CrossPointPosition localPos = {currentSpineIndex, currentPage, totalPagesInSpine};
   localPosition = crossPointToBf(epub, localPos);
 
   {
     RenderLock lock(*this);
     state = SHOWING_RESULT;
+    // Default to whichever side is further ahead
     selectedOption = (localPosition.percentage > remotePosition.percentage) ? 1 : 0;
   }
   requestUpdate(true);

@@ -121,6 +121,9 @@ BookFusionSyncClient::Error BookFusionSyncClient::pollForToken(const char* devic
   if (strcmp(errCode, "slow_down") == 0) return SLOW_DOWN;
   if (strcmp(errCode, "expired_token") == 0) return EXPIRED;
   if (strcmp(errCode, "access_denied") == 0) return DENIED;
+  // BookFusion returns "invalid_grant" (HTTP 400) while authorization is still
+  // pending — non-standard, but the official Lua plugin keeps polling on any
+  // unrecognised error, so we do the same.
   if (strcmp(errCode, "invalid_grant") == 0) return PENDING;
 
   return SERVER_ERROR;
@@ -208,8 +211,7 @@ BookFusionSyncClient::Error BookFusionSyncClient::setProgress(uint32_t bookId, c
 
 // --- Library Browse & Download ---
 
-BookFusionSyncClient::Error BookFusionSyncClient::searchBooks(int page, BookFusionSearchResult& out, const char* list,
-                                                              const char* sort) {
+BookFusionSyncClient::Error BookFusionSyncClient::searchBooks(int page, BookFusionSearchResult& out) {
   if (!BF_TOKEN_STORE.hasToken()) return NO_TOKEN;
 
   char url[128];
@@ -222,15 +224,17 @@ BookFusionSyncClient::Error BookFusionSyncClient::searchBooks(int page, BookFusi
   addAuthHeaders(http);
   http.addHeader("Content-Type", "application/json");
 
+  // 8 books per display page keeps the raw response under ~20 KB.
+  // Arduino String grows by doubling: a 53 KB response (21 books) needs a
+  // ~64 KB buffer during the final realloc, pushing peak heap above 113 KB.
+  // With 8 books the response is ~20 KB → peak ~40 KB, well within budget.
+  // Request 9 to detect hasMore without needing response headers.
   static constexpr int BOOKS_PER_PAGE = 8;
 
   JsonDocument reqBody;
   reqBody["page"] = page;
   reqBody["per_page"] = BOOKS_PER_PAGE + 1;
-  reqBody["sort"] = (sort != nullptr) ? sort : "added_at-desc";
-  if (list != nullptr) {
-    reqBody["list"] = list;
-  }
+  reqBody["sort"] = "added_at-desc";
   String bodyStr;
   serializeJson(reqBody, bodyStr);
 
@@ -250,9 +254,15 @@ BookFusionSyncClient::Error BookFusionSyncClient::searchBooks(int page, BookFusi
     return SERVER_ERROR;
   }
 
+  // Read the full response body before parsing. Streaming from WiFiClientSecure
+  // causes IncompleteInput errors because TLS chunks arrive after ArduinoJson
+  // has already read past the end of what was buffered.
   String responseBody = http.getString();
   http.end();
 
+  // Build a filter that discards every field except the four we need.
+  // BookFusion books carry ~20 fields (cover URLs, descriptions, etc.); keeping
+  // only what we display reduces JsonDocument heap from ~30 KB to ~5 KB.
   JsonDocument filter;
   filter[0]["id"] = true;
   filter[0]["title"] = true;
@@ -290,6 +300,7 @@ BookFusionSyncClient::Error BookFusionSyncClient::searchBooks(int page, BookFusi
     strlcpy(b.title, book["title"] | "Untitled", sizeof(b.title));
     strlcpy(b.format, book["format"] | "epub", sizeof(b.format));
 
+    // Concatenate author names from the authors array.
     b.authors[0] = '\0';
     JsonArray authors = book["authors"].as<JsonArray>();
     bool first = true;

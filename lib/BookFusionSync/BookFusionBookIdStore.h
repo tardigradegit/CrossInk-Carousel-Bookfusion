@@ -4,8 +4,8 @@
 
 /**
  * Per-book sidecar for BookFusion book IDs.
-   *
-   * Each EPUB that was downloaded from BookFusion has an associated sidecar file
+ *
+ * Each EPUB that was downloaded from BookFusion has an associated sidecar file
  * at /.crosspoint/bookfusion_<md5_of_epub_path>.json containing its numeric book_id.
  *
  * Returns 0 from loadBookId() when no sidecar exists — 0 is never a valid BookFusion ID.

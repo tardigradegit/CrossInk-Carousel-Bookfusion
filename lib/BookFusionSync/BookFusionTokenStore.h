@@ -2,10 +2,10 @@
 #include <string>
 
 class BookFusionTokenStore;
-namespace JsonSettingsIO {
-bool saveBookFusion(const BookFusionTokenStore& store, const char* path);
-bool loadBookFusion(BookFusionTokenStore& store, const char* json);
-}  // namespace JsonSettingsIO
+namespace BookFusionJsonIO {
+bool save(const BookFusionTokenStore& store, const char* path);
+bool load(BookFusionTokenStore& store, const char* json);
+}  // namespace BookFusionJsonIO
 
 /**
  * Singleton for storing the BookFusion OAuth Bearer token on the SD card.
@@ -29,8 +29,8 @@ class BookFusionTokenStore {
   bool hasToken() const { return !accessToken.empty(); }
   void clearToken();
 
-  friend bool JsonSettingsIO::saveBookFusion(const BookFusionTokenStore&, const char*);
-  friend bool JsonSettingsIO::loadBookFusion(BookFusionTokenStore&, const char*);
+  friend bool BookFusionJsonIO::save(const BookFusionTokenStore&, const char*);
+  friend bool BookFusionJsonIO::load(BookFusionTokenStore&, const char*);
 
  private:
   static BookFusionTokenStore instance;
