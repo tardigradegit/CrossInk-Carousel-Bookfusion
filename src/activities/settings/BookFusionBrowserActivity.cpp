@@ -21,7 +21,7 @@
 #include "util/StringUtils.h"
 
 namespace {
-constexpr int PAGE_ITEMS = 21;
+constexpr int PAGE_ITEMS = 21;  // 20 books + optional "Next page" sentinel
 
 struct Category {
   StrId nameId;
