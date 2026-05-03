@@ -303,7 +303,6 @@ STR_LOW_MEMORY_IMAGES_BODY: "La memòria disponible era massa baixa per extreure
 STR_TILT_PAGE_TURN: "Pas de pàgina per inclinació"
 STR_BOOKMARK_LIMIT_REACHED: "S'ha arribat al límit de marcadors"
 
-# --- BookFusion account & auth ---
 STR_BF_SYNC: "BookFusion Sync"
 STR_BF_AUTH: "BookFusion Auth"
 STR_BF_LINK_ACCOUNT: "Link Account"
@@ -323,7 +322,6 @@ STR_BF_NO_TOKEN_MSG: "Account not linked"
 STR_BF_SETUP_HINT: "Link your BookFusion account in Settings"
 STR_BF_NOT_A_BF_BOOK: "This book was not downloaded from BookFusion"
 
-# --- BookFusion library browser ---
 STR_BF_BROWSE_LIBRARY: "Browse Library"
 STR_BF_CURRENTLY_READING: "Currently Reading"
 STR_BF_FAVORITES: "Favorites"
