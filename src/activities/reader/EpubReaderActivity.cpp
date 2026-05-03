@@ -25,6 +25,9 @@
 #include "EpubReaderPercentSelectionActivity.h"
 #include "GlobalActions.h"
 #include "KOReaderCredentialStore.h"
+#include "BookFusionBookIdStore.h"
+#include "BookFusionSyncActivity.h"
+#include "BookFusionTokenStore.h"
 #include "KOReaderSyncActivity.h"
 #include "MappedInputManager.h"
 #include "QrDisplayActivity.h"
@@ -739,7 +742,28 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       break;
     }
     case EpubReaderMenuActivity::MenuAction::SYNC: {
-      if (KOREADER_STORE.hasCredentials()) {
+      if (BF_TOKEN_STORE.hasToken() && BookFusionBookIdStore::loadBookId(epub->getPath().c_str()) != 0) {
+        const int currentPage = section ? section->currentPage : nextPageNumber;
+        const int totalPages = section ? section->pageCount : cachedChapterTotalPageCount;
+        startActivityForResult(
+            std::make_unique<BookFusionSyncActivity>(renderer, mappedInput, epub, epub->getPath(),
+                                                     currentSpineIndex, currentPage, totalPages),
+            [this](const ActivityResult& result) {
+              if (!result.isCancelled) {
+                const auto& sync = std::get<SyncResult>(result.data);
+                if (currentSpineIndex != sync.spineIndex ||
+                    (section && section->currentPage != sync.page)) {
+                  RenderLock lock(*this);
+                  currentSpineIndex = sync.spineIndex;
+                  nextPageNumber = sync.page;
+                  cachedChapterTotalPageCount = 0;  // Prevent rescaling sync page
+                  pendingPageJump.reset();
+                  saveProgress(currentSpineIndex, nextPageNumber);
+                  section.reset();
+                }
+              }
+            });
+      } else if (KOREADER_STORE.hasCredentials()) {
         const int currentPage = section ? section->currentPage : nextPageNumber;
         const int totalPages = section ? section->pageCount : cachedChapterTotalPageCount;
         std::optional<uint16_t> paragraphIndex;
