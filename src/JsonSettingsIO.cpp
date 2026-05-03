@@ -13,6 +13,7 @@
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "BookFusionTokenStore.h"
 #include "KOReaderCredentialStore.h"
 #include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
@@ -437,5 +438,38 @@ bool JsonSettingsIO::loadOpds(OpdsServerStore& store, const char* json, bool* ne
   }
 
   LOG_DBG("OPS", "Loaded %zu OPDS servers from file", store.servers.size());
+  return true;
+}
+
+// ---- BookFusionTokenStore ----
+
+bool JsonSettingsIO::saveBookFusion(const BookFusionTokenStore& store, const char* path) {
+  JsonDocument doc;
+  doc["token_obf"] = obfuscation::obfuscateToBase64(store.accessToken);
+
+  String json;
+  serializeJson(doc, json);
+
+  return Storage.writeFile(path, json);
+}
+
+bool JsonSettingsIO::loadBookFusion(BookFusionTokenStore& store, const char* json) {
+  JsonDocument doc;
+  auto error = deserializeJson(doc, json);
+  if (error) {
+    LOG_ERR("BFS", "JSON parse error loading BookFusion token: %s", error.c_str());
+    return false;
+  }
+
+  bool ok = false;
+  store.accessToken = obfuscation::deobfuscateFromBase64(doc["token_obf"] | "", &ok);
+
+  if (!ok) {
+    LOG_ERR("BFS", "Failed to decode BookFusion token");
+    store.accessToken.clear();
+    return false;
+  }
+
+  LOG_DBG("BFS", "Loaded BookFusion token (%zu chars)", store.accessToken.size());
   return true;
 }
