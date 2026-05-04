@@ -758,7 +758,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
                   nextPageNumber = sync.page;
                   cachedChapterTotalPageCount = 0;  // Prevent rescaling sync page
                   pendingPageJump.reset();
-                  saveProgress(currentSpineIndex, nextPageNumber);
+                  saveProgress(currentSpineIndex, nextPageNumber, cachedChapterTotalPageCount);
                   section.reset();
                 }
               }
