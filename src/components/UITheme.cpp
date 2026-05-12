@@ -78,7 +78,8 @@ int UITheme::getNumberOfItemsPerPage(const GfxRenderer& renderer, bool hasHeader
   return availableHeight / rowHeight;
 }
 
-std::string UITheme::getCoverThumbPath(std::string coverBmpPath, int coverHeight) {
+std::string UITheme::getCoverThumbPath(const std::string& coverBmpPathIn, int coverHeight) {
+  std::string coverBmpPath = coverBmpPathIn;
   size_t pos = coverBmpPath.find("[HEIGHT]", 0);
   if (pos != std::string::npos) {
     coverBmpPath.replace(pos, 8, std::to_string(coverHeight));
