@@ -147,13 +147,10 @@ void LyraTheme::drawBatteryRight(const GfxRenderer& renderer, Rect rect, const b
 void LyraTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* title, const char* subtitle) const {
   renderer.fillRect(rect.x, rect.y, rect.width, rect.height, false);
 
-  const bool showBatteryPercentage =
-      SETTINGS.hideBatteryPercentage != CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_ALWAYS;
-  // Position icon at right edge, drawBatteryRight will place text to the left
-  const int batteryX = rect.x + rect.width - 12 - LyraMetrics::values.batteryWidth;
-  drawBatteryRight(renderer,
-                   Rect{batteryX, rect.y + 5, LyraMetrics::values.batteryWidth, LyraMetrics::values.batteryHeight},
-                   showBatteryPercentage);
+  // Battery moved to a thin top-of-screen bar (see BaseTheme::drawBatteryTopBar);
+  // the corner icon is gone so the title and subtitle can share the full width
+  // of the header without having to dodge it.
+  drawBatteryTopBar(renderer);
 
   int maxTitleWidth = title != nullptr ? renderer.getTextWidth(UI_12_FONT_ID, title, EpdFontFamily::BOLD) : 0;
   int maxSubtitleWidth =
@@ -182,7 +179,15 @@ void LyraTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
     renderer.drawText(UI_12_FONT_ID, rect.x + LyraMetrics::values.contentSidePadding,
                       rect.y + LyraMetrics::values.batteryBarHeight + 3, truncatedTitle.c_str(), true,
                       EpdFontFamily::BOLD);
-    renderer.drawLine(rect.x, rect.y + rect.height - 3, rect.x + rect.width - 1, rect.y + rect.height - 3, 3, true);
+    // Inset the underline by the same amount the battery top bar uses
+    // (orientedMargin + SETTINGS.screenMargin) so the two share a visual edge.
+    int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
+    renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                     &orientedMarginLeft);
+    const int lineInsetLeft = orientedMarginLeft + SETTINGS.screenMargin;
+    const int lineInsetRight = orientedMarginRight + SETTINGS.screenMargin;
+    const int lineY = rect.y + rect.height - 3;
+    renderer.drawLine(rect.x + lineInsetLeft, lineY, rect.x + rect.width - lineInsetRight - 1, lineY, 3, true);
   }
 
   if (subtitle) {
@@ -210,7 +215,16 @@ void LyraTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const char
       UI_10_FONT_ID, label, rect.width - LyraMetrics::values.contentSidePadding - rightSpace, EpdFontFamily::REGULAR);
   renderer.drawText(UI_10_FONT_ID, currentX, rect.y + 6, truncatedLabel.c_str(), true, EpdFontFamily::REGULAR);
 
-  renderer.drawLine(rect.x, rect.y + rect.height - 1, rect.x + rect.width - 1, rect.y + rect.height - 1, true);
+  // Underline inset by the same amount the battery top bar uses so all
+  // full-screen-width horizontal lines share the same gutters.
+  {
+    int oTop, oRight, oBottom, oLeft;
+    renderer.getOrientedViewableTRBL(&oTop, &oRight, &oBottom, &oLeft);
+    const int inL = oLeft + SETTINGS.screenMargin;
+    const int inR = oRight + SETTINGS.screenMargin;
+    const int lineY = rect.y + rect.height - 1;
+    renderer.drawLine(rect.x + inL, lineY, rect.x + rect.width - inR - 1, lineY, true);
+  }
 }
 
 void LyraTheme::drawTabBar(const GfxRenderer& renderer, Rect rect, const std::vector<TabInfo>& tabs,
@@ -242,7 +256,16 @@ void LyraTheme::drawTabBar(const GfxRenderer& renderer, Rect rect, const std::ve
     currentX += textWidth + LyraMetrics::values.tabSpacing + 2 * hPaddingInSelection;
   }
 
-  renderer.drawLine(rect.x, rect.y + rect.height - 1, rect.x + rect.width - 1, rect.y + rect.height - 1, true);
+  // Underline inset by the same amount the battery top bar uses so all
+  // full-screen-width horizontal lines share the same gutters.
+  {
+    int oTop, oRight, oBottom, oLeft;
+    renderer.getOrientedViewableTRBL(&oTop, &oRight, &oBottom, &oLeft);
+    const int inL = oLeft + SETTINGS.screenMargin;
+    const int inR = oRight + SETTINGS.screenMargin;
+    const int lineY = rect.y + rect.height - 1;
+    renderer.drawLine(rect.x + inL, lineY, rect.x + rect.width - inR - 1, lineY, true);
+  }
 }
 
 void LyraTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, int selectedIndex,

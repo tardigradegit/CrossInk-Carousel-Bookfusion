@@ -1171,7 +1171,9 @@ void EpubReaderActivity::render(RenderLock&& lock) {
   int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
   renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
                                    &orientedMarginLeft);
-  orientedMarginTop += SETTINGS.screenMargin;
+  // +7 extra above body text so the first line has a comfortable gap below
+  // the battery top bar.
+  orientedMarginTop += SETTINGS.screenMargin + 7;
   orientedMarginLeft += SETTINGS.screenMargin;
   orientedMarginRight += SETTINGS.screenMargin;
 
@@ -1732,10 +1734,11 @@ bool EpubReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gf
   // Apply the reader orientation so margins match what the reader would produce
   ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
 
-  // Compute margins exactly as render() does
+  // Compute margins exactly as render() does (including the +7 extra above
+  // body text so this preview path matches the live render).
   int marginTop, marginRight, marginBottom, marginLeft;
   renderer.getOrientedViewableTRBL(&marginTop, &marginRight, &marginBottom, &marginLeft);
-  marginTop += SETTINGS.screenMargin;
+  marginTop += SETTINGS.screenMargin + 7;
   marginLeft += SETTINGS.screenMargin;
   marginRight += SETTINGS.screenMargin;
   const uint8_t statusBarHeight = UITheme::getInstance().getStatusBarHeight();

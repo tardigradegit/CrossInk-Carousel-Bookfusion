@@ -147,18 +147,39 @@ void BookStatsActivity::render(RenderLock&&) {
   const int contentRight = screenWidth - margin;
   const int contentW = screenWidth - 2 * margin;
 
-  // ─── Header ("Reading Stats" + battery, drawn as today) ─────────────────
+  // ─── Header (selected book title + battery; replaces the static "Reading
+  //     Stats" heading. The duplicate per-book title that used to sit under
+  //     the cover is gone — folding it into the header reclaims a UI_12 line
+  //     plus its 10-px gap so the stat grids shift up.) ─────────────────────
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, screenWidth, metrics.headerHeight}, "");
   {
-    const int availableH = metrics.headerHeight - metrics.batteryBarHeight;
     const int titleX = metrics.contentSidePadding;
-    const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-    const int titleY = metrics.topPadding + metrics.batteryBarHeight + (availableH - lineHeight) / 2;
-    const int batteryStartX = screenWidth - metrics.contentSidePadding - metrics.batteryWidth;
-    const int maxTitleWidth = batteryStartX - titleX - metrics.contentSidePadding;
-    const std::string truncTitle =
-        renderer.truncatedText(UI_12_FONT_ID, tr(STR_READING_STATS), maxTitleWidth, EpdFontFamily::BOLD);
+    // Match the title Y used by LyraTheme::drawHeader for every other page
+    // (topPadding + batteryBarHeight + 3) so this page lines up with the
+    // settings / file browser / etc. headers instead of sitting lower.
+    const int titleY = metrics.topPadding + metrics.batteryBarHeight + 3;
+    const int budget = screenWidth - 2 * metrics.contentSidePadding;
+    constexpr int gap = 12;  // separation between title and author
+
+    const char* headerTitle = currentTitle.empty() ? tr(STR_READING_STATS) : currentTitle.c_str();
+    const bool hasAuthor = !currentAuthor.empty();
+    const int authorRawW =
+        hasAuthor ? renderer.getTextWidth(UI_12_FONT_ID, currentAuthor.c_str(), EpdFontFamily::REGULAR) : 0;
+    const int authorReserved = hasAuthor ? (gap + authorRawW) : 0;
+    const int titleMaxW = std::max(0, budget - authorReserved);
+
+    const std::string truncTitle = renderer.truncatedText(UI_12_FONT_ID, headerTitle, titleMaxW, EpdFontFamily::BOLD);
+    const int truncTitleW = renderer.getTextWidth(UI_12_FONT_ID, truncTitle.c_str(), EpdFontFamily::BOLD);
     renderer.drawText(UI_12_FONT_ID, titleX, titleY, truncTitle.c_str(), true, EpdFontFamily::BOLD);
+
+    if (hasAuthor) {
+      const int authorMaxW = std::max(0, budget - truncTitleW - gap);
+      if (authorMaxW > 20) {
+        const std::string truncAuthor =
+            renderer.truncatedText(UI_12_FONT_ID, currentAuthor.c_str(), authorMaxW, EpdFontFamily::REGULAR);
+        renderer.drawText(UI_12_FONT_ID, titleX + truncTitleW + gap, titleY, truncAuthor.c_str(), true);
+      }
+    }
   }
 
   // Cursor that walks down the page; each section advances it.
@@ -172,9 +193,13 @@ void BookStatsActivity::render(RenderLock&&) {
   // outside it (matches the selected-book border thickness in the Recent
   // Books grid), so the visual footprint (bitmap + border) is (450 × 242).
   constexpr int kCoverMaxW = 444;
-  constexpr int kCoverMaxH = 236;
+  // 236 → 280 to use the room recovered from the menu shift-up. Real covers
+  // are aspect-fit, so a 0.667-aspect book renders ~187 wide × 280 tall here
+  // (was 158×236) — a noticeable size bump without crowding the peeks.
+  constexpr int kCoverMaxH = 280;
   constexpr int kCoverBorder = 3;
-  constexpr int kCoverGapBottom = 14;
+  // Tighter gap (was 14) so the per-book stat grid hugs the cover.
+  constexpr int kCoverGapBottom = 8;
 
   if (!currentCoverBmpPath.empty()) {
     const std::string thumbPath = UITheme::getCoverThumbPath(currentCoverBmpPath, metrics.homeCoverHeight);
@@ -302,18 +327,14 @@ void BookStatsActivity::render(RenderLock&&) {
   //   stat value       = UI_10 BOLD       (centered in cell — slightly smaller than v3 to fit the page)
   //   stat label       = SMALL regular    (centered, sits below value)
   const int ui12Lh = renderer.getLineHeight(UI_12_FONT_ID);
-  const int valueLh = renderer.getLineHeight(UI_10_FONT_ID);
+  // Stat values bumped UI_10 → UI_12: matches the title weight/size and reads
+  // less cramped now that we have the vertical headroom for the taller cells.
+  const int valueLh = renderer.getLineHeight(UI_12_FONT_ID);
   const int smallLh = renderer.getLineHeight(SMALL_FONT_ID);
 
-  // ─── Section 2: book title (centered) ────────────────────────────────────
-  {
-    const std::string truncTitle =
-        renderer.truncatedText(UI_12_FONT_ID, currentTitle.c_str(), contentW, EpdFontFamily::BOLD);
-    const int tw = renderer.getTextWidth(UI_12_FONT_ID, truncTitle.c_str(), EpdFontFamily::BOLD);
-    renderer.drawText(UI_12_FONT_ID, (screenWidth - tw) / 2, y, truncTitle.c_str(), true, EpdFontFamily::BOLD);
-    y += ui12Lh;
-  }
-  y += 10;  // gap before per-book stats grid (matched with all-books heading→grid)
+  // Section 2 (the duplicate centered book title) used to sit here. It was
+  // dropped because the page header already shows the same title; the stat
+  // grid below now starts directly under the cover gap.
 
   // ─── Stat grid helper ────────────────────────────────────────────────────
   // 3 equal-width columns spanning contentW (~149 px each on a 480 px screen).
@@ -354,8 +375,8 @@ void BookStatsActivity::render(RenderLock&&) {
       const int valueY = cellY + gridRowPadTop;
       const int labelY = valueY + valueLh + gridValueLabelGap;
 
-      const int vw = renderer.getTextWidth(UI_10_FONT_ID, value, EpdFontFamily::BOLD);
-      renderer.drawText(UI_10_FONT_ID, cellX + (cellW - vw) / 2, valueY, value, true, EpdFontFamily::BOLD);
+      const int vw = renderer.getTextWidth(UI_12_FONT_ID, value, EpdFontFamily::BOLD);
+      renderer.drawText(UI_12_FONT_ID, cellX + (cellW - vw) / 2, valueY, value, true, EpdFontFamily::BOLD);
 
       const int lw = renderer.getTextWidth(SMALL_FONT_ID, label);
       renderer.drawText(SMALL_FONT_ID, cellX + (cellW - lw) / 2, labelY, label, true);
@@ -397,13 +418,13 @@ void BookStatsActivity::render(RenderLock&&) {
                       });
 
   // ─── Section 3: All Books (centered heading) ─────────────────────────────
-  // 18 px gap is the only separator — no line, no box.
-  y += 18;
+  // Gap is the only separator — no line, no box.
+  y += 24;
   {
     const int hw = renderer.getTextWidth(UI_12_FONT_ID, tr(STR_STATS_ALL_TIME), EpdFontFamily::BOLD);
     renderer.drawText(UI_12_FONT_ID, (screenWidth - hw) / 2, y, tr(STR_STATS_ALL_TIME), true, EpdFontFamily::BOLD);
   }
-  y += ui12Lh + 10;  // heading sits 10 px above the grid that follows (matches title→grid)
+  y += ui12Lh + 4;  // heading sits 4 px above the All Books grid (tighter than before)
 
   // 6 stats — Sessions, Reading Time, Pages Turned, Avg Session, Pages/Min,
   // and Books Read (existing STR_STATS_COMPLETED_LBL backing the same data).

@@ -5,6 +5,7 @@
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
+#include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Serialization.h>
@@ -28,11 +29,52 @@
 #include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
+#include "components/icons/chart.h"
+#include "components/icons/folder.h"
+#include "components/icons/recent.h"
+#include "components/icons/settings2.h"
+#include "components/icons/transfer.h"
 #include "fontIds.h"
 
 namespace {
 constexpr uint32_t TXT_CACHE_MAGIC = 0x54585449;  // "TXTI"
 constexpr uint8_t TXT_CACHE_VERSION = 2;
+
+// Draw a 1-bit packed icon scaled with nearest-neighbor blocks. drawIcon
+// doesn't scale, and baking pre-scaled assets into flash would balloon their
+// size, so this trades a pile of small fillRects for keeping the existing
+// 32×32 sources.
+//
+// Important: the icon bytes are stored in eink-native orientation
+// (LandscapeCounterClockwise — the panel's physical layout). The renderer
+// translates draw coordinates to native via Portrait rotation
+// `native = (logical_y, panelHeight-1-logical_x)`. To read the right pixel
+// for a logical destination, we map logical (lx, ly) within the icon to
+// native (nx=ly, ny=srcSize-1-lx) and read the bit from native row-major
+// storage. Without this mapping the icon renders rotated 90° CCW.
+void drawIconScaled(const GfxRenderer& renderer, const uint8_t* iconData, int srcSize, int dstX, int dstY,
+                    int dstSize) {
+  for (int slx = 0; slx < srcSize; ++slx) {
+    const int dstXStart = (slx * dstSize) / srcSize;
+    const int dstXEnd = ((slx + 1) * dstSize) / srcSize;
+    const int blockW = dstXEnd - dstXStart;
+    if (blockW <= 0) continue;
+    for (int sly = 0; sly < srcSize; ++sly) {
+      // Logical (slx, sly) → native (sly, srcSize-1-slx). Bytes are row-major
+      // in native: bitPos = ny * srcSize + nx.
+      const int bitPos = (srcSize - 1 - slx) * srcSize + sly;
+      const uint8_t byte = iconData[bitPos / 8];
+      const bool isBlack = !((byte >> (7 - (bitPos % 8))) & 1);
+      if (!isBlack) continue;
+      const int dstYStart = (sly * dstSize) / srcSize;
+      const int dstYEnd = ((sly + 1) * dstSize) / srcSize;
+      const int blockH = dstYEnd - dstYStart;
+      if (blockH > 0) {
+        renderer.fillRect(dstX + dstXStart, dstY + dstYStart, blockW, blockH, true);
+      }
+    }
+  }
+}
 
 float clampProgressPercent(const float progress) { return std::clamp(progress, 0.0f, 100.0f); }
 
@@ -181,18 +223,12 @@ std::string statsCachePathForBook(const std::string& bookPath) {
 }  // namespace
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 4;  // File Browser, Recents, File transfer, Settings
+  // The home strip is a fixed 6-icon horizontal row (Recent, Stats,
+  // FileTransfer, Browse, Bookmarks, Settings). The "menu count" used by
+  // loop() is the total navigable count (recent books + the 6 menu items).
+  int count = 6;
   if (!recentBooks.empty()) {
     count += recentBooks.size();
-  }
-  if (hasOpdsServers) {
-    count++;
-  }
-  if (hasReadingStats) {
-    count++;
-  }
-  if (hasBookmarks) {
-    count++;
   }
   return count;
 }
@@ -326,6 +362,8 @@ void HomeActivity::onEnter() {
   // and cheaper than re-reading on every carousel scroll.
   recentBookStats.clear();
   recentBookStats.reserve(recentBooks.size());
+  recentBookProgress.clear();
+  recentBookProgress.reserve(recentBooks.size());
   for (const auto& book : recentBooks) {
     BookReadingStats stats;
     const std::string path = statsCachePathForBook(book.path);
@@ -333,6 +371,11 @@ void HomeActivity::onEnter() {
       stats = BookReadingStats::load(path);
     }
     recentBookStats.push_back(stats);
+    // Per-book progress: more expensive (opens the EPUB to resolve the cache
+    // path and run calculateProgress), but homeRecentBooksCount is capped at
+    // 5, so this is a few hundred ms one-time cost on home enter — small
+    // compared to the cover thumbnail generation that happens here too.
+    recentBookProgress.push_back(loadRecentBookProgressPercent(book));
   }
   globalStats = GlobalReadingStats::load();
   hasReadingStats = hasAnyBookStats(currentBookStats) || hasAnyGlobalStats(globalStats);
@@ -391,92 +434,81 @@ void HomeActivity::freeCoverBuffer() {
 }
 
 void HomeActivity::loop() {
-  const int menuCount = getMenuItemCount();
   const int recentCount = static_cast<int>(recentBooks.size());
   const bool inCarousel = static_cast<int>(selectorIndex) < recentCount;
 
-  // Up/Down rocker → menu navigation only. From the carousel, the first press
-  // jumps into the menu (Down → first item, Up → last item). Falling off the
-  // menu boundaries (Up from first item, Down from last item) drops back to
-  // the first book — the carousel is "home base", so vertical motion past
-  // the menu always returns there.
-  // Falling off either menu boundary drops back into the carousel on the
-  // book that's currently centered (lastBookIndex), not book 0. The carousel
-  // already shows that book while the user navigates the menu (see render's
-  // carouselDisplayIndex encoding), so this just makes the selection match
-  // what's already visible.
-  const int returnToBookIndex = (lastBookIndex >= 0 && lastBookIndex < recentCount) ? lastBookIndex : 0;
-  if (mappedInput.wasReleased(MappedInputManager::Button::Down)) {
+  // X3 layout: bottom rocker (Left/Right) cycles through the horizontal menu
+  // strip; side rocker (Up/Down) navigates the carousel. Pressing Left/Right
+  // from inside the carousel jumps to the menu (first or last icon); once in
+  // the menu, Left/Right wrap within the 6 icons. Up/Down brings the user
+  // back to the centered book.
+  constexpr int kHomeMenuCount = 6;
+  if (mappedInput.wasReleased(MappedInputManager::Button::Right)) {
     if (inCarousel) {
       lastBookIndex = selectorIndex;
-      selectorIndex = recentCount;
-    } else if (selectorIndex >= menuCount - 1) {
-      selectorIndex = returnToBookIndex;
+      selectorIndex = recentCount;  // first menu icon
     } else {
-      ++selectorIndex;
+      const int menuIdx = static_cast<int>(selectorIndex) - recentCount;
+      selectorIndex = recentCount + (menuIdx + 1) % kHomeMenuCount;
     }
     requestUpdate();
   }
-  if (mappedInput.wasReleased(MappedInputManager::Button::Up)) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Left)) {
     if (inCarousel) {
       lastBookIndex = selectorIndex;
-      selectorIndex = menuCount - 1;
-    } else if (selectorIndex <= recentCount) {
-      selectorIndex = returnToBookIndex;
+      selectorIndex = recentCount + kHomeMenuCount - 1;  // last menu icon
     } else {
-      --selectorIndex;
+      const int menuIdx = static_cast<int>(selectorIndex) - recentCount;
+      selectorIndex = recentCount + (menuIdx - 1 + kHomeMenuCount) % kHomeMenuCount;
     }
     requestUpdate();
   }
 
-  // Left/Right side buttons → carousel navigation only. From the menu, the
-  // first press drops back to the last book the user was on. Inside the
-  // carousel it wraps end-to-end.
-  if (recentCount > 0 && mappedInput.wasReleased(MappedInputManager::Button::Right)) {
+  // Side rocker (Up/Down) → carousel navigation. From the menu, the first
+  // press drops back to the last book the user was on. Inside the carousel
+  // it wraps end-to-end.
+  //
+  // The cover-buffer cache is invalidated only on the "scroll within
+  // carousel" branch — menu↔carousel transitions keep the same centered
+  // book (lastBookIndex), so the cached cover + chrome stay valid and the
+  // next render skips its SD I/O. This is the main lag fix.
+  if (recentCount > 0 && mappedInput.wasReleased(MappedInputManager::Button::Down)) {
     if (!inCarousel) {
       selectorIndex = lastBookIndex < recentCount ? lastBookIndex : 0;
     } else {
       selectorIndex = (selectorIndex + 1) % recentCount;
+      coverRendered = false;
+      coverBufferStored = false;
     }
     requestUpdate();
   }
-  if (recentCount > 0 && mappedInput.wasReleased(MappedInputManager::Button::Left)) {
+  if (recentCount > 0 && mappedInput.wasReleased(MappedInputManager::Button::Up)) {
     if (!inCarousel) {
       selectorIndex = lastBookIndex < recentCount ? lastBookIndex : 0;
     } else {
       selectorIndex = (selectorIndex == 0) ? recentCount - 1 : selectorIndex - 1;
+      coverRendered = false;
+      coverBufferStored = false;
     }
     requestUpdate();
   }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    // Calculate dynamic indices based on which options are available
-    int idx = 0;
-    int menuSelectedIndex = selectorIndex - static_cast<int>(recentBooks.size());
-    const int fileBrowserIdx = idx++;
-    const int recentsIdx = idx++;
-    const int readingStatsIdx = hasReadingStats ? idx++ : -1;
-    const int bookmarksIdx = hasBookmarks ? idx++ : -1;
-    const int opdsLibraryIdx = hasOpdsServers ? idx++ : -1;
-    const int fileTransferIdx = idx++;
-    const int settingsIdx = idx;
-
+    // Indices match the kHomeMenuItems array in render(): Recent / Stats /
+    // FileTransfer / Browse / Bookmarks / Settings.
+    const int menuIdx = static_cast<int>(selectorIndex) - static_cast<int>(recentBooks.size());
     if (selectorIndex < recentBooks.size()) {
       onSelectBook(recentBooks[selectorIndex].path);
-    } else if (menuSelectedIndex == fileBrowserIdx) {
-      onFileBrowserOpen();
-    } else if (menuSelectedIndex == recentsIdx) {
-      onRecentsOpen();
-    } else if (menuSelectedIndex == opdsLibraryIdx) {
-      onOpdsBrowserOpen();
-    } else if (menuSelectedIndex == readingStatsIdx) {
-      onReadingStatsOpen();
-    } else if (menuSelectedIndex == bookmarksIdx) {
-      onBookmarksOpen();
-    } else if (menuSelectedIndex == fileTransferIdx) {
-      onFileTransferOpen();
-    } else if (menuSelectedIndex == settingsIdx) {
-      onSettingsOpen();
+    } else {
+      switch (menuIdx) {
+        case 0: onRecentsOpen(); break;
+        case 1: onReadingStatsOpen(); break;
+        case 2: onFileTransferOpen(); break;
+        case 3: onFileBrowserOpen(); break;
+        case 4: onBookmarksOpen(); break;
+        case 5: onSettingsOpen(); break;
+        default: break;
+      }
     }
   }
 }
@@ -491,6 +523,22 @@ void HomeActivity::render(RenderLock&&) {
 
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.homeTopPadding},
                  metrics.homeContinueReadingInMenu && !recentBooks.empty() ? recentBooks[0].title.c_str() : nullptr);
+
+  // Home-page-only battery percentage under the battery top bar, right-aligned
+  // at the same screenMargin inset the bar uses. The left/center status texts
+  // we briefly tried were too cluttered, so this stays a solo element.
+  {
+    const uint16_t batteryPct = std::min<uint16_t>(powerManager.getBatteryPercentage(), 100);
+    char pctBuf[8];
+    snprintf(pctBuf, sizeof(pctBuf), "%u%%", static_cast<unsigned>(batteryPct));
+    int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
+    renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                     &orientedMarginLeft);
+    const int rightInset = orientedMarginRight + SETTINGS.screenMargin;
+    const int pctWidth = renderer.getTextWidth(SMALL_FONT_ID, pctBuf);
+    const int pctY = 18;  // battery bar bottom at y=14; 4 px gap below it
+    renderer.drawText(SMALL_FONT_ID, pageWidth - rightInset - pctWidth, pctY, pctBuf, true);
+  }
 
   // When the user has navigated up/down into the menu, selectorIndex points
   // at a menu row (>= recentCount). The carousel's "no selection" branch
@@ -516,53 +564,73 @@ void HomeActivity::render(RenderLock&&) {
       (centeredBookIdx >= 0 && centeredBookIdx < static_cast<int>(recentBookStats.size()))
           ? &recentBookStats[centeredBookIdx]
           : nullptr;
+  const float centeredBookProgress =
+      (centeredBookIdx >= 0 && centeredBookIdx < static_cast<int>(recentBookProgress.size()))
+          ? recentBookProgress[centeredBookIdx]
+          : -1.0f;
   GUI.drawRecentBookCover(renderer, Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight},
                           recentBooks, carouselDisplayIndex, coverRendered, coverBufferStored, bufferRestored,
                           std::bind(&HomeActivity::storeCoverBuffer, this), centeredBookStats,
-                          currentBookProgressPercent);
+                          centeredBookProgress);
 
-  // Build menu items dynamically
-  std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), tr(STR_FILE_TRANSFER),
-                                        tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Folder, Recent, Transfer, Settings};
+  // Horizontal icon strip — 6 fixed items, drawn just above the button hints.
+  // Selected icon gets a light-gray rounded cell. Cycle order matches the
+  // dispatch in loop() — keep them in sync. The bookmark item has a null
+  // icon pointer because we draw a 5-point ribbon polygon for it instead of
+  // blitting a stored bitmap (matches the bookmark glyph used elsewhere).
+  struct HomeMenuItem {
+    const uint8_t* icon;  // nullptr for special items rendered as polygons
+    bool isBookmark;
+    const char* label;
+  };
+  const HomeMenuItem kHomeMenuItems[6] = {
+      {RecentIcon, false, tr(STR_MENU_RECENT_BOOKS)}, {ChartIcon, false, tr(STR_READING_STATS)},
+      {TransferIcon, false, tr(STR_FILE_TRANSFER)},   {FolderIcon, false, tr(STR_BROWSE_FILES)},
+      {nullptr, true, tr(STR_BOOKMARKS)},             {Settings2Icon, false, tr(STR_SETTINGS_TITLE)},
+  };
+  constexpr int kHomeMenuCount = 6;
+  constexpr int kIconSrcSize = 32;   // raw bitmap dimensions (assets are 32×32)
+  constexpr int iconSize = 40;       // visual size; drawIconScaled resamples 32→40
+  constexpr int iconCellSize = 56;
+  constexpr int sideMargin = 32;
 
-  if (hasOpdsServers) {
-    menuItems.insert(menuItems.begin() + 2, tr(STR_OPDS_BROWSER));
-    menuIcons.insert(menuIcons.begin() + 2, Library);
+  const int hintsTopY = pageHeight - metrics.buttonHintsHeight;
+  const int iconCellBottomY = hintsTopY - 16;  // 16 px gap above the hints row
+  const int iconCellTopY = iconCellBottomY - iconCellSize;
+  const int totalIconArea = pageWidth - 2 * sideMargin;
+  const int iconPitch = totalIconArea / kHomeMenuCount;
+
+  const int menuSelectedIndex =
+      (selectorIndex >= recentBooks.size()) ? static_cast<int>(selectorIndex - recentBooks.size()) : -1;
+
+  for (int i = 0; i < kHomeMenuCount; ++i) {
+    const int cellCenterX = sideMargin + iconPitch / 2 + i * iconPitch;
+    const int cellX = cellCenterX - iconCellSize / 2;
+    const int iconX = cellCenterX - iconSize / 2;
+    const int iconY = iconCellTopY + (iconCellSize - iconSize) / 2;
+    if (i == menuSelectedIndex) {
+      renderer.fillRoundedRect(cellX, iconCellTopY, iconCellSize, iconCellSize, 6, Color::LightGray);
+    }
+    if (kHomeMenuItems[i].isBookmark) {
+      // 5-point bookmark ribbon (top-left → top-right → bottom-right → notch
+      // tip → bottom-left). Geometry mirrors LyraTheme's tile-row bookmark
+      // glyph, scaled to the icon cell so 6 icons share the same visual
+      // weight on the strip.
+      const int ribbonW = (iconSize * 16) / 22;
+      const int ribbonH = iconSize;
+      const int notchH = (iconSize * 6) / 22;
+      const int rIconX = iconX + (iconSize - ribbonW) / 2;
+      const int rIconY = iconY;
+      const int notchTipX = rIconX + ribbonW / 2;
+      const int polyX[5] = {rIconX, rIconX + ribbonW, rIconX + ribbonW, notchTipX, rIconX};
+      const int polyY[5] = {rIconY, rIconY, rIconY + ribbonH, rIconY + ribbonH - notchH, rIconY + ribbonH};
+      renderer.fillPolygon(polyX, polyY, 5, true);
+    } else if (kHomeMenuItems[i].icon != nullptr) {
+      drawIconScaled(renderer, kHomeMenuItems[i].icon, kIconSrcSize, iconX, iconY, iconSize);
+    }
   }
 
-  if (hasReadingStats) {
-    // Insert Reading Stats after OPDS (or after Recents if no OPDS), before File Transfer
-    const int insertPos = hasOpdsUrl ? 3 : 2;
-    menuItems.insert(menuItems.begin() + insertPos, tr(STR_READING_STATS));
-    menuIcons.insert(menuIcons.begin() + insertPos, Chart);
-  }
-
-  if (hasBookmarks) {
-    int insertPos = 2;
-    if (hasOpdsUrl) insertPos++;
-    if (hasReadingStats) insertPos++;
-    menuItems.insert(menuItems.begin() + insertPos, tr(STR_BOOKMARKS));
-    menuIcons.insert(menuIcons.begin() + insertPos, BookmarkIcon);
-  }
-
-  const int menuStartY = metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.homeMenuTopOffset;
-  const int menuEndY = pageHeight - metrics.buttonHintsHeight;
-  const int menuHeight = std::max(0, menuEndY - menuStartY);
-
-  if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
-    // Insert Continue Reading at the top if enabled in theme
-    menuItems.insert(menuItems.begin(), tr(STR_CONTINUE_READING));
-    menuIcons.insert(menuIcons.begin(), Book);
-  }
-
-  GUI.drawButtonMenu(
-      renderer, Rect{0, menuStartY, pageWidth, menuHeight}, static_cast<int>(menuItems.size()),
-      metrics.homeContinueReadingInMenu ? selectorIndex : selectorIndex - recentBooks.size(),
-      [&menuItems](int index) { return std::string(menuItems[index]); },
-      [&menuIcons](int index) { return menuIcons[index]; });
-
-  const auto labels = mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_PREV), tr(STR_DIR_NEXT));
+  const auto labels = mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();

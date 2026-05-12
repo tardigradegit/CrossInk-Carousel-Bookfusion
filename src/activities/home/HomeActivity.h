@@ -34,6 +34,11 @@ class HomeActivity final : public Activity {
   // sideways through the carousel without doing file I/O per render.
   // Same index as recentBooks; default-constructed when no stats file exists.
   std::vector<BookReadingStats> recentBookStats;
+  // Per-book progress percent, indexed parallel to recentBooks. -1.0f when
+  // we couldn't resolve a progress.bin for a book. Eagerly loaded in onEnter
+  // so the Flow theme's per-book progress bar can update as the user scrolls
+  // the carousel without on-demand file I/O.
+  std::vector<float> recentBookProgress;
   void onSelectBook(const std::string& path);
   void onFileBrowserOpen();
   void onRecentsOpen();

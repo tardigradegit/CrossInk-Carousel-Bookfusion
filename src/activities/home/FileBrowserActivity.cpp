@@ -432,7 +432,13 @@ void FileBrowserActivity::render(RenderLock&&) {
   {
     const int pathY = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing - pathLineHeight;
     const int separatorY = pathY - metrics.verticalSpacing / 2;
-    renderer.drawLine(0, separatorY, pageWidth - 1, separatorY, 3, true);
+    // Inset the separator by the same amount the battery bar / header
+    // underline use, so all full-width lines share consistent gutters.
+    int oTop, oRight, oBottom, oLeft;
+    renderer.getOrientedViewableTRBL(&oTop, &oRight, &oBottom, &oLeft);
+    const int sepInL = oLeft + SETTINGS.screenMargin;
+    const int sepInR = oRight + SETTINGS.screenMargin;
+    renderer.drawLine(sepInL, separatorY, pageWidth - sepInR - 1, separatorY, 3, true);
     const int pathMaxWidth = pageWidth - metrics.contentSidePadding * 2;
     // Left-truncate so the deepest directory is always visible
     const char* pathStr = basepath.c_str();

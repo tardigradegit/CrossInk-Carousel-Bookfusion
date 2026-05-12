@@ -565,7 +565,9 @@ bool TxtReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gfx
 
   int marginTop, marginRight, marginBottom, marginLeft;
   renderer.getOrientedViewableTRBL(&marginTop, &marginRight, &marginBottom, &marginLeft);
-  marginTop += screenMargin;
+  // +7 extra above body text so the first line has a comfortable gap below
+  // the battery top bar (matches EpubReaderActivity).
+  marginTop += screenMargin + 7;
   marginLeft += screenMargin;
   marginRight += screenMargin;
   marginBottom += std::max(screenMargin, static_cast<uint8_t>(UITheme::getInstance().getStatusBarHeight()));

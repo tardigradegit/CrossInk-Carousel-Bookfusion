@@ -9,8 +9,13 @@ namespace LyraMetrics {
 constexpr ThemeMetrics values = {.batteryWidth = 16,
                                  .batteryHeight = 12,
                                  .topPadding = 5,
-                                 .batteryBarHeight = 40,
-                                 .headerHeight = 84,
+                                 // Reclaimed 24 px of empty space at the top of every menu page now
+                                 // that the corner battery icon is gone. With the bar at y=0..7, a
+                                 // batteryBarHeight of 16 puts the title at y=24 (16 px gap below the
+                                 // bar) and a headerHeight of 60 keeps the original 16 px gap between
+                                 // the title and the header underline.
+                                 .batteryBarHeight = 16,
+                                 .headerHeight = 60,
                                  .verticalSpacing = 16,
                                  .contentSidePadding = 20,
                                  .listRowHeight = 40,

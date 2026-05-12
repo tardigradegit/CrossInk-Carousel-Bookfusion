@@ -182,6 +182,13 @@ class BaseTheme {
 
   // Shared constants and helpers for battery drawing (used by all themes)
   static constexpr int batteryPercentSpacing = 4;
+  static constexpr int batteryTopBarHeight = 3;  // 1-px track + 3-px fill overlap (fill extends downward)
   static void drawBatteryOutline(const GfxRenderer& renderer, int x, int y, int battWidth, int rectHeight);
   static void drawBatteryLightningBolt(const GfxRenderer& renderer, int boltX, int boltY);
+  // Top-edge battery indicator: a thin 1-px track at y=0 spanning the body-text
+  // inset, with a 3-px fill extending downward from the track to mark the
+  // current battery percentage. Mirrors the reader progress bar style but
+  // flipped vertically (track on top, fill below) and with the fill direction
+  // reversed (more battery → wider fill on the left).
+  static void drawBatteryTopBar(const GfxRenderer& renderer);
 };

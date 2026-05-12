@@ -17,8 +17,12 @@ class RecentBooksGridActivity final : public Activity {
  public:
   static constexpr int BOOKS_PER_PAGE = 9;   // 3 cols x 3 rows
   static constexpr int MAX_BOOKS = BOOKS_PER_PAGE * 2;
-  static constexpr int COVER_HEIGHT = 180;
-  static constexpr int COVER_WIDTH = 123;
+  // X3-tuned slot. COVER_WIDTH dropped from 143 to 140 so the slot's aspect
+  // (140/210 = 0.667) matches a typical 2:3 book cover exactly — bitmaps
+  // fill the slot without horizontal padding, so the visual horizontal gap
+  // between covers equals gridSpacing (and matches the 8-px vertical gap).
+  static constexpr int COVER_HEIGHT = 210;
+  static constexpr int COVER_WIDTH = 140;
 
  private:
   ButtonNavigator buttonNavigator;

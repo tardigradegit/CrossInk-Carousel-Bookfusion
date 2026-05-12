@@ -102,6 +102,13 @@ UIIcon UITheme::getFileIcon(const std::string& filename) {
   return File;
 }
 
+// The new reader progress bar floats 15 px above the screen bottom (track at
+// y=screenH-13, fill at y=screenH-15), so we reserve 15 px of vertical space
+// for it instead of the old thickness-driven calculation.
+namespace {
+constexpr int kFloatingProgressBarReserve = 15;
+}
+
 int UITheme::getStatusBarHeight() {
   const ThemeMetrics& metrics = UITheme::getInstance().getMetrics();
 
@@ -111,13 +118,11 @@ int UITheme::getStatusBarHeight() {
                              SETTINGS.statusBarBattery;
   const bool showProgressBar =
       SETTINGS.statusBarProgressBar != CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS;
-  return (showStatusBar ? (metrics.statusBarVerticalMargin) : 0) +
-         (showProgressBar ? (((SETTINGS.statusBarProgressBarThickness + 1) * 2) + metrics.progressBarMarginTop) : 0);
+  return (showStatusBar ? (metrics.statusBarVerticalMargin) : 0) + (showProgressBar ? kFloatingProgressBarReserve : 0);
 }
 
 int UITheme::getProgressBarHeight() {
-  const ThemeMetrics& metrics = UITheme::getInstance().getMetrics();
   const bool showProgressBar =
       SETTINGS.statusBarProgressBar != CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS;
-  return (showProgressBar ? (((SETTINGS.statusBarProgressBarThickness + 1) * 2) + metrics.progressBarMarginTop) : 0);
+  return showProgressBar ? kFloatingProgressBarReserve : 0;
 }

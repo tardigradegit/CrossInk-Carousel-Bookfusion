@@ -108,30 +108,12 @@ void RoundedRaffTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const 
   const int titleX = rect.x + sidePadding;
   const int titleY = rect.y + 14;
 
-  const bool showBatteryPercentage =
-      SETTINGS.hideBatteryPercentage != CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_ALWAYS;
-  const uint16_t percentage = powerManager.getBatteryPercentage();
-  const int batteryIconX = rect.x + rect.width - sidePadding - RoundedRaffMetrics::values.batteryWidth;
-  int batteryGroupLeftX = batteryIconX;
-  if (showBatteryPercentage) {
-    const auto percentageText = std::to_string(percentage) + "%";
-    batteryGroupLeftX -= renderer.getTextWidth(SMALL_FONT_ID, percentageText.c_str()) + batteryPercentSpacing;
+  // Battery moved to a thin top-of-screen bar (see BaseTheme::drawBatteryTopBar).
+  drawBatteryTopBar(renderer);
 
-    // Clear a fixed-width area for the battery percentage to avoid ghosting when digit count changes (e.g. 100% ->
-    // 99%).
-    const int maxTextWidth = renderer.getTextWidth(SMALL_FONT_ID, "100%");
-    const int clearW = maxTextWidth + batteryPercentSpacing + RoundedRaffMetrics::values.batteryWidth;
-    const int clearH = std::max(renderer.getTextHeight(SMALL_FONT_ID), RoundedRaffMetrics::values.batteryHeight + 8);
-    renderer.fillRect(batteryIconX - maxTextWidth - batteryPercentSpacing, rect.y + 14, clearW, clearH, false);
-  }
-
-  const int maxTextWidth = std::max(0, batteryGroupLeftX - 20 - titleX);
+  const int maxTextWidth = std::max(0, rect.width - 2 * sidePadding);
   auto headerTitle = renderer.truncatedText(kTitleFontId, title, maxTextWidth, EpdFontFamily::BOLD);
   renderer.drawText(kTitleFontId, titleX, titleY, headerTitle.c_str(), true, EpdFontFamily::BOLD);
-  drawBatteryRightStable(renderer,
-                         Rect{batteryIconX, rect.y + 14, RoundedRaffMetrics::values.batteryWidth,
-                              RoundedRaffMetrics::values.batteryHeight},
-                         percentage, showBatteryPercentage);
 }
 
 void RoundedRaffTheme::drawTabBar(const GfxRenderer& renderer, Rect rect, const std::vector<TabInfo>& tabs,

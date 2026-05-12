@@ -3,6 +3,7 @@
 #include <Bitmap.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
+#include <I18n.h>
 
 #include <algorithm>
 #include <cmath>
@@ -26,12 +27,23 @@
 #include "fontIds.h"
 
 namespace {
-constexpr int centerCoverWidth = 220;
-constexpr int centerCoverHeight = 320;
-constexpr int sideCoverWidth = 66;     // 30% of center
-constexpr int sideInnerHeight = 288;   // 90% of center — taller edge (toward middle)
-constexpr int sideOuterHeight = 256;   // 80% of center — shorter edge (away from middle)
+// X3 carousel: tighter overlap (32 px instead of the X4 base 16) and scaled
+// up so the L-far cover still sits at ~29 px from the screen edge — the
+// stack reads more compact even though every cover is bigger.
+constexpr int centerCoverWidth = 270;
+constexpr int centerCoverHeight = 392;
+constexpr int sideCoverWidth = 82;
+constexpr int sideInnerHeight = 353;
+constexpr int sideOuterHeight = 314;
 constexpr int bookCornerRadius = 6;
+
+// Side-cover x-positions chosen so each adjacent pair (L-far/L-near,
+// L-near/center, R-near/center, R-far/R-near) overlaps by 32 px and the L-far
+// cover starts at x=29 (right symmetric).
+constexpr int sideXLeftFar = 29;
+constexpr int sideXLeftNear = 79;
+constexpr int sideXRightNear = 367;
+constexpr int sideXRightFar = 417;
 
 // Menu visuals — kept in sync with LyraTheme's anonymous-namespace constants
 // so the Flow override looks identical to the parent's button menu.
@@ -87,15 +99,23 @@ void cutRoundedCorners(GfxRenderer& renderer, int x, int y, int w, int h, int r)
 void LyraFlowTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                                         const int selectorIndex, bool& coverRendered, bool& coverBufferStored,
                                         bool& bufferRestored, std::function<bool()> storeCoverBuffer,
-                                        const BookReadingStats* stats, float /*progressPercent*/) const {
+                                        const BookReadingStats* stats, float progressPercent) const {
   if (recentBooks.empty()) {
     drawEmptyRecents(renderer, rect);
     return;
   }
 
   const int pageWidth = renderer.getScreenWidth();
-  const int centerY = rect.y + 40;
   const int centerX = pageWidth / 2;
+  // Cover sits flush to the top of the rect (with a small breathing margin);
+  // title + author now live BELOW the cover, so we no longer need the
+  // text-driven clamp that used to push the cover down to clear text above it.
+  // Cover top offset within the rect. Bumped 8 → 48 to push the carousel
+  // lower and shrink the leftover vertical room around the title/author block
+  // (which is centered inside that leftover space).
+  constexpr int kCoverTopOffset = 48;
+  const int titleLh = renderer.getLineHeight(UI_12_FONT_ID);
+  const int authorLh = renderer.getLineHeight(UI_10_FONT_ID);
   const int count = static_cast<int>(recentBooks.size());
 
   // selectorIndex >= count means HomeActivity has navigated past the books and
@@ -112,24 +132,27 @@ void LyraFlowTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
     if (decoded >= 0 && decoded < count) curIdx = decoded;
   }
 
-  // The carousel chrome (header date, footer hints, etc.) is drawn by
-  // HomeActivity, not by us. We have nothing static to cache here, so just
-  // honor the buffer-snapshot protocol the same way the other themes do.
-  if (bufferRestored) {
-    coverRendered = true;
-    coverBufferStored = true;
-  } else {
-    coverRendered = true;
-    coverBufferStored = storeCoverBuffer();
-  }
+  // Cover top is fixed near the top of the rect — title+author live beneath
+  // the cover now, so there's no text above to dodge.
+  const bool hasAuthorLine = !recentBooks[curIdx].author.empty();
+  const int centerY = rect.y + kCoverTopOffset;
 
+  // ────────────────────────────────────────────────────────────────────────
+  // Buffer gate: skip the SD-heavy cover loading + chrome drawing when the
+  // previous render's framebuffer was successfully cached and the centered
+  // book hasn't changed. HomeActivity invalidates `coverRendered` and
+  // `coverBufferStored` whenever the user scrolls within the carousel; menu
+  // navigation (Left/Right) leaves them set so this branch is taken and
+  // input feels responsive.
+  if (!coverRendered) {
   // --- Side covers (perspective-projected, drawn outside-in so the center
   //     can land cleanly on top of any near-book overlap) ---
   auto drawStackedCover = [&](int idx, bool isLeft, bool isFar) {
     const int hL = isLeft ? sideInnerHeight : sideOuterHeight;
     const int hR = isLeft ? sideOuterHeight : sideInnerHeight;
     const int hMax = std::max(hL, hR);
-    const int drawX = isLeft ? (isFar ? 30 : 80) : (isFar ? 385 : 335);
+    const int drawX = isLeft ? (isFar ? sideXLeftFar : sideXLeftNear)
+                              : (isFar ? sideXRightFar : sideXRightNear);
     const int drawY = centerY + (centerCoverHeight / 2) - (hMax / 2);
 
     const std::string coverPath = UITheme::getCoverThumbPath(recentBooks[idx].coverBmpPath, centerCoverHeight);
@@ -232,12 +255,14 @@ void LyraFlowTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
   }
   renderer.drawRoundedRect(cX, actualY, actualCoverWidth, actualCoverHeight, 2, bookCornerRadius, true);
 
-  if (hasSelection) {
-    renderer.drawRoundedRect(cX - 2, actualY - 2, actualCoverWidth + 4, actualCoverHeight + 4, 4,
-                             bookCornerRadius + 2, true);
-  }
-
   if (centerOpened) cf.close();
+
+  // Cache positions so the selection-border-only path below can redraw the
+  // border on subsequent frames without re-running the SD load above.
+  cachedCenterCoverX = cX;
+  cachedCenterCoverY = actualY;
+  cachedActualCoverWidth = actualCoverWidth;
+  cachedActualCoverHeight = actualCoverHeight;
 
   // --- Title above the center cover (filename, no extension) ---
   std::string filename = recentBooks[curIdx].title.empty() ? recentBooks[curIdx].path : recentBooks[curIdx].title;
@@ -248,24 +273,127 @@ void LyraFlowTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
     if (lastDot != std::string::npos && lastDot > 0) filename = filename.substr(0, lastDot);
   }
 
+  // Tight progress bar hugging the bottom of the cover (4 px gap). Same
+  // 1-px-track + 3-px-fill family as the reader / battery bars. Width and
+  // left edge follow the actual rendered cover (cX/actualCoverWidth) instead
+  // of the slot dims, so the bar lines up flush with the unselected cover
+  // edges — including books whose aspect makes the rendered cover narrower
+  // than the 270-px slot.
+  const int progressBarTopY = centerY + centerCoverHeight + 4;
+  constexpr int progressBarVisualHeight = 3;
+  if (progressPercent >= 0.0f) {
+    const float clamped = std::clamp(progressPercent, 0.0f, 100.0f);
+    const int barLeftX = cX;
+    const int barW = actualCoverWidth;
+    const int fillW = static_cast<int>((barW * clamped) / 100.0f);
+    renderer.fillRect(barLeftX, progressBarTopY + 2, barW, 1, true);
+    if (fillW > 0) {
+      renderer.fillRect(barLeftX, progressBarTopY, fillW, progressBarVisualHeight, true);
+    }
+  }
+
+  // YouTube/iPod-style time indicator under the progress bar. Elapsed time
+  // hugs the bar's left edge, projected total hugs the right edge, so the
+  // cover + bar + times cluster reads as one card. Both align to the actual
+  // rendered cover (cX, actualCoverWidth) rather than the slot dims, so they
+  // shift with narrower covers like the bar does.
+  //
+  // Edge cases (finished books / no useful projection) collapse to a single
+  // centered time. Total page count isn't cheaply available in this codebase
+  // (Epub::getBookSize returns bytes, not pages, and per-chapter page counts
+  // depend on the user's font setup), so we don't try to extrapolate via
+  // global pages/min for the unstarted case — single time is cleaner anyway.
+  const int timeReadFontLh = renderer.getLineHeight(SMALL_FONT_ID);
+  const int timeReadY = progressBarTopY + progressBarVisualHeight + 4;
+  {
+    const uint32_t elapsedSecs = (stats != nullptr) ? stats->totalReadingSeconds : 0;
+    const bool isCompleted = (stats != nullptr && stats->isCompleted);
+    const bool inReadFolder = recentBooks[curIdx].path.find("/Read/") != std::string::npos;
+    const bool finished = isCompleted || inReadFolder || (progressPercent >= 99.5f);
+
+    auto formatHMM = [](uint32_t seconds, char* buf, size_t len) {
+      const uint32_t hours = seconds / 3600;
+      const uint32_t minutes = (seconds % 3600) / 60;
+      snprintf(buf, len, "%u:%02u", static_cast<unsigned>(hours), static_cast<unsigned>(minutes));
+    };
+
+    char elapsedBuf[12];
+    formatHMM(elapsedSecs, elapsedBuf, sizeof(elapsedBuf));
+
+    if (finished || elapsedSecs == 0 || progressPercent < 0.1f) {
+      // Single centered time — no useful right-side projection.
+      const int w = renderer.getTextWidth(SMALL_FONT_ID, elapsedBuf);
+      renderer.drawText(SMALL_FONT_ID, centerX - w / 2, timeReadY, elapsedBuf, true);
+    } else {
+      const float projectedSecsF = static_cast<float>(elapsedSecs) * 100.0f / progressPercent;
+      const uint32_t projectedSecs = static_cast<uint32_t>(projectedSecsF + 0.5f);
+      char projectedBuf[12];
+      formatHMM(projectedSecs, projectedBuf, sizeof(projectedBuf));
+      // Scrubber: open (outlined) circle vertically aligned with the time
+      // row. Skipped when its edges would land within `kDotPadding` of either
+      // time label so the dot doesn't crowd the times at the start or end
+      // of the bar. In practice this hides the dot near 0 % and 100 %.
+      const int dotDiameter = std::max(2, renderer.getTextHeight(SMALL_FONT_ID) - 4);
+      const int dotR = dotDiameter / 2;
+      const float clampedPct = std::clamp(progressPercent, 0.0f, 100.0f);
+      const int dotCenterX = cX + static_cast<int>(actualCoverWidth * clampedPct / 100.0f + 0.5f);
+      const int textH = renderer.getTextHeight(SMALL_FONT_ID);
+      const int dotTopY = timeReadY + (textH - dotDiameter) / 2;
+      const int elapsedW = renderer.getTextWidth(SMALL_FONT_ID, elapsedBuf);
+      const int projW = renderer.getTextWidth(SMALL_FONT_ID, projectedBuf);
+      constexpr int kDotPadding = 6;
+      const int elapsedRightEdge = cX + elapsedW;
+      const int projectedLeftEdge = cX + actualCoverWidth - projW;
+      const int dotLeftEdge = dotCenterX - dotR;
+      const int dotRightEdge = dotCenterX + dotR;
+      const bool dotFits = (dotLeftEdge >= elapsedRightEdge + kDotPadding) &&
+                           (dotRightEdge <= projectedLeftEdge - kDotPadding);
+      if (dotFits) {
+        renderer.drawRoundedRect(dotLeftEdge, dotTopY, dotDiameter, dotDiameter, 1, dotR, true);
+      }
+      // Elapsed on the bar's left edge, projected right-aligned with the bar's
+      // right edge — same row as the dot.
+      renderer.drawText(SMALL_FONT_ID, cX, timeReadY, elapsedBuf, true);
+      renderer.drawText(SMALL_FONT_ID, projectedLeftEdge, timeReadY, projectedBuf, true);
+    }
+  }
+
+  // Title + author centered in the leftover vertical room between the time
+  // line and the rect bottom (which is laid out to align with the menu strip
+  // top — see LyraFlowMetrics::homeCoverTileHeight).
+  const int textAreaTop = timeReadY + timeReadFontLh + 1;
+  const int textAreaBottom = rect.y + rect.height;
+  const int textAreaHeight = std::max(0, textAreaBottom - textAreaTop);
+  const int titleBlockHeight = titleLh + (hasAuthorLine ? (1 + authorLh) : 0);
+  const int titleTopY = textAreaTop + std::max(0, (textAreaHeight - titleBlockHeight) / 2);
+
   const std::string truncatedTitle =
       renderer.truncatedText(UI_12_FONT_ID, filename.c_str(), pageWidth - 40, EpdFontFamily::BOLD);
   const int titleWidth = renderer.getTextWidth(UI_12_FONT_ID, truncatedTitle.c_str(), EpdFontFamily::BOLD);
-  renderer.drawText(UI_12_FONT_ID, centerX - titleWidth / 2, rect.y - 5, truncatedTitle.c_str(), true,
+  renderer.drawText(UI_12_FONT_ID, centerX - titleWidth / 2, titleTopY, truncatedTitle.c_str(), true,
                     EpdFontFamily::BOLD);
 
-  // --- Per-book reading time, centered below the center cover. Mirrors the
-  //     reference Lua FlowTheme: "Xh Ym" in SMALL_FONT, 8 px under the cover.
-  //     Always rendered (even "0h 0m") so the layout is stable whether the
-  //     user has read the book or not. ---
-  char timeStr[16];
-  const uint32_t bookSeconds = (stats != nullptr) ? stats->totalReadingSeconds : 0;
-  const uint32_t hours = bookSeconds / 3600;
-  const uint32_t minutes = (bookSeconds % 3600) / 60;
-  snprintf(timeStr, sizeof(timeStr), "%uh %um", static_cast<unsigned>(hours), static_cast<unsigned>(minutes));
-  const int timeWidth = renderer.getTextWidth(SMALL_FONT_ID, timeStr);
-  const int timeY = centerY + centerCoverHeight + 8;
-  renderer.drawText(SMALL_FONT_ID, centerX - timeWidth / 2, timeY, timeStr, true);
+  if (hasAuthorLine) {
+    const int authorY = titleTopY + titleLh + 1;
+    const std::string truncatedAuthor =
+        renderer.truncatedText(UI_10_FONT_ID, recentBooks[curIdx].author.c_str(), pageWidth - 40);
+    const int authorWidth = renderer.getTextWidth(UI_10_FONT_ID, truncatedAuthor.c_str());
+    renderer.drawText(UI_10_FONT_ID, centerX - authorWidth / 2, authorY, truncatedAuthor.c_str(), true);
+  }
+
+  // Snapshot the cover + chrome (everything we just drew, minus the
+  // selection border which is drawn per-frame below). The next render can
+  // restore this in one memcpy and skip every SD I/O above.
+  coverBufferStored = storeCoverBuffer();
+  coverRendered = coverBufferStored;
+  }  // end of `if (!coverRendered)` gate
+
+  // Selection border drawn EVERY frame outside the gate so the rectangle can
+  // toggle (carousel ↔ menu) without invalidating the cached buffer.
+  if (hasSelection && cachedActualCoverWidth > 0) {
+    renderer.drawRoundedRect(cachedCenterCoverX - 2, cachedCenterCoverY - 2, cachedActualCoverWidth + 4,
+                             cachedActualCoverHeight + 4, 4, bookCornerRadius + 2, true);
+  }
 }
 
 void LyraFlowTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
