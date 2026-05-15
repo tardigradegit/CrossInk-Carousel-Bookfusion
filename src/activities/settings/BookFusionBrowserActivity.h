@@ -10,7 +10,7 @@
  * Browse and download books from the user's BookFusion library.
  *
  * Shows the user's library 20 books at a time (paginated).
- * Selecting a book fetches a pre-signed download URL, streams the EPUB
+ * Selecting a book fetches a pre-signed download URL, streams the EPUBh
  * to the SD card, and writes a BookFusion sidecar via BookFusionBookIdStore
  * so that progress sync works immediately after download.
  *
@@ -40,8 +40,8 @@ class BookFusionBrowserActivity final : public Activity {
   int selectedCategory = 0;
   int currentCategory = 0;
 
-  // Large enough for pre-signed S3 URLs (typically 500-900 chars).
-  char downloadUrl[1024] = {};
+  // Large enough for pre-signed S3 URLs (BookFusion URLs can exceed 1450 bytes).
+  char downloadUrl[2048] = {};
   char downloadTitle[64] = {};
   size_t downloadProgress = 0;
   size_t downloadTotal = 0;
