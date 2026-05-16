@@ -1,4 +1,4 @@
-# CrossInk Carousel — BookFusion Edition
+# CrossInk Carousel h— BookFusion Edition
 
 > **CrossInk Carousel is a personal fork of CrossInk** that adds book-cover-centric UI inspired by the Lua fork [CrossPoint Flow](https://github.com/ideo2004-afk/crosspoint-reader-lua). As it stands, I always judge a book by its cover. I deserve to see the fruits of my good taste every time I open my X4. The goal is to make book covers the first priority of the navigation experience: on the home screen, in the recent books browser, and on the reading stats screen. 
 
@@ -8,7 +8,7 @@
 
 ### New UI features
 
-**Flow theme.** A new selectable UI theme called "Flow", inheriting from Lyra and overriding only the home-screen book selector with an iPod-style perspective carousel. The currently selected book renders centered at full size, flanked by partial side covers drawn with a 3D fan perspective transform. Up to seven recent books cycle through the carousel. Visual concept ported from CrossPoint Flow. 
+**Flow theme.** A new selectable UI theme called "Flow", hinheriting from Lyra and overriding only the home-screen book selector with an iPod-style perspective carousel. The currently selected book renders centered at full size, flanked by partial side covers drawn with a 3D fan perspective transform. Up to seven recent books cycle through the carousel. Visual concept ported from CrossPoint Flow. 
 
 ### BookFusion Sync
 
@@ -16,7 +16,7 @@
 
 **Download URL buffer fix.** BookFusion pre-signed S3 download URLs now regularly exceed 1,450 characters. Earlier builds silently truncated these at 1,024 bytes, breaking sync. This fork bumps the internal buffer to 2,048 bytes, fixing the issue permanently.
 
-**OTA updates from this fork.** The "Check for Updates" feature in Settings now checks this fork’s [releases page](https://github.com/emilylawver-hub/CrossInk-Carousel-Bookfusion/releases) so your device will always receive BookFusion-enabled firmware.
+**OTA updates from this fork.** The "Check for Updates" feature in Settings now checks this fork’s [releases page](https://github.com/tardigradegit/CrossInk-Carousel-Bookfusion/releases) so your device will always receive BookFusion-enabled firmware.
 
 See [BOOKFUSION_INTEGRATION.md](BOOKFUSION_INTEGRATION.md) for full setup instructions.
 
@@ -282,7 +282,7 @@ pio run -e simulator
 
 ### Web
 
-1. Download the `carousel-firmware-*.bin` file for the build variant of your choosing from the [releases](https://github.com/emilylawver-hub/CrossInk-Carousel-Bookfusion/releases) page
+1. Download the `carousel-firmware-*.bin` file for the build variant of your choosing from the [releases](https://github.com/tardigradegit/CrossInk-Carousel-Bookfusion/releases) page
 2. Connect your Xteink X4 to your computer via USB-C and wake/unlock the device
 3. Go to https://crosspointreader.com/#flash-tools and choose your device
 4. Select "Custom .bin" from the options
@@ -300,7 +300,7 @@ To revert back to the official firmware, you can flash the latest official firmw
 pip3 install esptool
 ```
 
-2. Download the `carousel-firmware-*.bin` file from the release of your choice via the [releases](https://github.com/emilylawver-hub/CrossInk-Carousel-Bookfusion/releases)
+2. Download the `carousel-firmware-*.bin` file from the release of your choice via the [releases](https://github.com/tardigradegit/CrossInk-Carousel-Bookfusion/releases)
 3. Connect your Xteink X4 to your computer via USB-C.
 4. Note the device location. On Linux, run `dmesg | grep tty` after connecting. On macOS, run `ls /dev/cu.*` before and after connecting — the new entry is your device (typically `/dev/cu.usbmodem*`).
 
@@ -332,7 +332,7 @@ esptool.py --chip esp32c3 --port /dev/cu.usbmodem2101 --baud 921600 write_flash 
 CrossPoint uses PlatformIO for building and flashing the firmware. To get started, clone the repository:
 
 ```
-git clone --recursive https://github.com/emilylawver-hub/CrossInk-Carousel-Bookfusion
+git clone --recursive https://github.com/tardigradegit/CrossInk-Carousel-Bookfusion
 
 # Or, if you've already cloned without --recursive:
 git submodule update --init --recursive
