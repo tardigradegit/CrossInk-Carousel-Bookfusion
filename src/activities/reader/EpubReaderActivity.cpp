@@ -6,6 +6,7 @@
 #include <FontCacheManager.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
+#include <HalGPIO.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
@@ -1352,8 +1353,10 @@ void EpubReaderActivity::render(RenderLock&& lock) {
   renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
                                    &orientedMarginLeft);
   // +7 extra above body text so the first line has a comfortable gap below
-  // the battery top bar.
-  orientedMarginTop += SETTINGS.screenMargin + 7;
+  // the battery top bar. X4 ships with a lower top bezel; the battery bar
+  // sits 6 px farther down there (see BaseTheme::drawBatteryTopBar), so add
+  // the same delta here to keep the gap consistent on both devices.
+  orientedMarginTop += SETTINGS.screenMargin + 7 + (gpio.deviceIsX4() ? 6 : 0);
   orientedMarginLeft += SETTINGS.screenMargin;
   orientedMarginRight += SETTINGS.screenMargin;
 

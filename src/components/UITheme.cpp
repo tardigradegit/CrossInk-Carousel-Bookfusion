@@ -2,6 +2,7 @@
 
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
+#include <HalGPIO.h>
 #include <Logging.h>
 
 #include <memory>
@@ -40,39 +41,49 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
     case CrossPointSettings::UI_THEME::CLASSIC:
       LOG_DBG("UI", "Using Classic theme");
       currentTheme = std::make_unique<BaseTheme>();
-      currentMetrics = &BaseMetrics::values;
+      currentMetrics = BaseMetrics::values;
       break;
     case CrossPointSettings::UI_THEME::LYRA:
       LOG_DBG("UI", "Using Lyra theme");
       currentTheme = std::make_unique<LyraTheme>();
-      currentMetrics = &LyraMetrics::values;
+      currentMetrics = LyraMetrics::values;
       break;
     case CrossPointSettings::UI_THEME::ROUNDEDRAFF:
       LOG_DBG("UI", "Using RoundedRaff theme");
       currentTheme = std::make_unique<RoundedRaffTheme>();
-      currentMetrics = &RoundedRaffMetrics::values;
+      currentMetrics = RoundedRaffMetrics::values;
       break;
     case CrossPointSettings::UI_THEME::LYRA_3_COVERS:
       LOG_DBG("UI", "Using Lyra 3 Covers theme");
       currentTheme = std::make_unique<Lyra3CoversTheme>();
-      currentMetrics = &Lyra3CoversMetrics::values;
+      currentMetrics = Lyra3CoversMetrics::values;
       break;
     case CrossPointSettings::UI_THEME::LYRA_FLOW:
       LOG_DBG("UI", "Using Lyra Flow theme");
       currentTheme = std::make_unique<LyraFlowTheme>();
-      currentMetrics = &LyraFlowMetrics::values;
+      currentMetrics = LyraFlowMetrics::values;
       break;
     case CrossPointSettings::UI_THEME::MINIMAL:
       LOG_DBG("UI", "Using Minimal theme");
       currentTheme = std::make_unique<MinimalTheme>();
-      currentMetrics = &MinimalMetrics::values;
+      currentMetrics = MinimalMetrics::values;
       break;
     case CrossPointSettings::UI_THEME::LYRA_CAROUSEL:
     default:
       LOG_ERR("UI", "Unknown / unregistered theme %d, falling back to Classic", static_cast<int>(type));
       currentTheme = std::make_unique<BaseTheme>();
-      currentMetrics = &BaseMetrics::values;
+      currentMetrics = BaseMetrics::values;
       break;
+  }
+
+  // X4 ships with a lower top bezel, so the battery top bar lives 6 px farther
+  // down (see BaseTheme::drawBatteryTopBar). Push every header rect and the
+  // content rows below it down by the same 6 px on X4 so the gap between the
+  // bar and the page title/body stays consistent with X3. We bake this into
+  // topPadding because every header rect we draw is anchored to topPadding,
+  // and every "content below header" calculation chains off topPadding too.
+  if (gpio.deviceIsX4()) {
+    currentMetrics.topPadding += 6;
   }
 }
 
