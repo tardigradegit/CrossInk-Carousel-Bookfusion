@@ -181,6 +181,11 @@ class BaseTheme {
                                const char* secondaryLabel = nullptr, KeyboardKeyType keyType = KeyboardKeyType::Normal,
                                bool inactiveSelection = false) const;
   virtual bool showsFileIcons() const { return false; }
+  // Themes can opt into a compact file-browser row layout (e.g. Minimal) by
+  // returning true here and a custom row height. Defaults keep the standard
+  // list rendering.
+  virtual bool usesCompactFileBrowserRows() const { return false; }
+  virtual int compactFileBrowserRowHeight(const GfxRenderer&) const { return BaseMetrics::values.listRowHeight; }
   virtual void drawCarouselBorder(GfxRenderer& renderer, Rect coverRect, const std::vector<RecentBook>& recentBooks,
                                   int centerIdx, bool inCarouselRow) const {}
 

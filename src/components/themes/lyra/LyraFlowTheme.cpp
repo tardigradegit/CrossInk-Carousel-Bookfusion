@@ -39,11 +39,13 @@ constexpr int bookCornerRadius = 6;
 
 // Side-cover x-positions chosen so each adjacent pair (L-far/L-near,
 // L-near/center, R-near/center, R-far/R-near) overlaps by 32 px and the L-far
-// cover starts at x=29 (right symmetric).
+// cover starts at x=29 from the left edge. The right-side positions are
+// mirrored from the right screen edge at render time so they stay symmetric
+// across X3 (528 px wide) and X4 (480 px wide).
 constexpr int sideXLeftFar = 29;
 constexpr int sideXLeftNear = 79;
-constexpr int sideXRightNear = 367;
-constexpr int sideXRightFar = 417;
+constexpr int sideXRightEdgeFar = 29;
+constexpr int sideXRightEdgeNear = 79;
 
 // Menu visuals — kept in sync with LyraTheme's anonymous-namespace constants
 // so the Flow override looks identical to the parent's button menu.
@@ -151,8 +153,12 @@ void LyraFlowTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
     const int hL = isLeft ? sideInnerHeight : sideOuterHeight;
     const int hR = isLeft ? sideOuterHeight : sideInnerHeight;
     const int hMax = std::max(hL, hR);
+    // Right-side positions mirror the left from the screen's right edge so
+    // both sides stay symmetric on X3 (528 px) and X4 (480 px).
+    const int rightFarX = pageWidth - sideXRightEdgeFar - sideCoverWidth;
+    const int rightNearX = pageWidth - sideXRightEdgeNear - sideCoverWidth;
     const int drawX = isLeft ? (isFar ? sideXLeftFar : sideXLeftNear)
-                              : (isFar ? sideXRightFar : sideXRightNear);
+                              : (isFar ? rightFarX : rightNearX);
     const int drawY = centerY + (centerCoverHeight / 2) - (hMax / 2);
 
     const std::string coverPath = UITheme::getCoverThumbPath(recentBooks[idx].coverBmpPath, centerCoverHeight);
@@ -279,14 +285,18 @@ void LyraFlowTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
   // of the slot dims, so the bar lines up flush with the unselected cover
   // edges — including books whose aspect makes the rendered cover narrower
   // than the 270-px slot.
-  const int progressBarTopY = centerY + centerCoverHeight + 4;
+  const int progressBarTopY = centerY + centerCoverHeight + 8;
   constexpr int progressBarVisualHeight = 3;
   if (progressPercent >= 0.0f) {
     const float clamped = std::clamp(progressPercent, 0.0f, 100.0f);
     const int barLeftX = cX;
     const int barW = actualCoverWidth;
     const int fillW = static_cast<int>((barW * clamped) / 100.0f);
-    renderer.fillRect(barLeftX, progressBarTopY + 2, barW, 1, true);
+    // Track is the middle row of the 3-px fill band (was the bottom row) so
+    // the unfilled track and the thicker filled portion share a horizontal
+    // centerline. Visually: the thin line sits halfway through the thick
+    // line's height instead of at its bottom edge.
+    renderer.fillRect(barLeftX, progressBarTopY + 1, barW, 1, true);
     if (fillW > 0) {
       renderer.fillRect(barLeftX, progressBarTopY, fillW, progressBarVisualHeight, true);
     }
@@ -304,7 +314,11 @@ void LyraFlowTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
   // depend on the user's font setup), so we don't try to extrapolate via
   // global pages/min for the unstarted case — single time is cleaner anyway.
   const int timeReadFontLh = renderer.getLineHeight(SMALL_FONT_ID);
-  const int timeReadY = progressBarTopY + progressBarVisualHeight + 4;
+  // Bring the time row up so the gap between bar bottom and text top matches
+  // the 4-px gap between the unselected cover bottom and the bar top.
+  // drawText's `y` is bbox top but the visible glyph starts ~2 px below it
+  // (top-side leading), so +2 here gives a ~4-px optical gap.
+  const int timeReadY = progressBarTopY + progressBarVisualHeight + 6;
   {
     const uint32_t elapsedSecs = (stats != nullptr) ? stats->totalReadingSeconds : 0;
     const bool isCompleted = (stats != nullptr && stats->isCompleted);
@@ -329,30 +343,10 @@ void LyraFlowTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
       const uint32_t projectedSecs = static_cast<uint32_t>(projectedSecsF + 0.5f);
       char projectedBuf[12];
       formatHMM(projectedSecs, projectedBuf, sizeof(projectedBuf));
-      // Scrubber: open (outlined) circle vertically aligned with the time
-      // row. Skipped when its edges would land within `kDotPadding` of either
-      // time label so the dot doesn't crowd the times at the start or end
-      // of the bar. In practice this hides the dot near 0 % and 100 %.
-      const int dotDiameter = std::max(2, renderer.getTextHeight(SMALL_FONT_ID) - 4);
-      const int dotR = dotDiameter / 2;
-      const float clampedPct = std::clamp(progressPercent, 0.0f, 100.0f);
-      const int dotCenterX = cX + static_cast<int>(actualCoverWidth * clampedPct / 100.0f + 0.5f);
-      const int textH = renderer.getTextHeight(SMALL_FONT_ID);
-      const int dotTopY = timeReadY + (textH - dotDiameter) / 2;
-      const int elapsedW = renderer.getTextWidth(SMALL_FONT_ID, elapsedBuf);
       const int projW = renderer.getTextWidth(SMALL_FONT_ID, projectedBuf);
-      constexpr int kDotPadding = 6;
-      const int elapsedRightEdge = cX + elapsedW;
       const int projectedLeftEdge = cX + actualCoverWidth - projW;
-      const int dotLeftEdge = dotCenterX - dotR;
-      const int dotRightEdge = dotCenterX + dotR;
-      const bool dotFits = (dotLeftEdge >= elapsedRightEdge + kDotPadding) &&
-                           (dotRightEdge <= projectedLeftEdge - kDotPadding);
-      if (dotFits) {
-        renderer.drawRoundedRect(dotLeftEdge, dotTopY, dotDiameter, dotDiameter, 1, dotR, true);
-      }
       // Elapsed on the bar's left edge, projected right-aligned with the bar's
-      // right edge — same row as the dot.
+      // right edge.
       renderer.drawText(SMALL_FONT_ID, cX, timeReadY, elapsedBuf, true);
       renderer.drawText(SMALL_FONT_ID, projectedLeftEdge, timeReadY, projectedBuf, true);
     }

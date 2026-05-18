@@ -134,6 +134,8 @@ class GfxRenderer {
   // (which holds a const GfxRenderer&) before measuring word widths. Safe to call on non-SD fonts (no-op).
   // styleMask: bitmask of styles to prepare (bit 0=regular, 1=bold, 2=italic, 3=bold-italic).
   void ensureSdCardFontReady(int fontId, const char* utf8Text, uint8_t styleMask = 0x0F) const;
+  void ensureSdCardFontReady(int fontId, const std::vector<std::string>& words, bool includeHyphen,
+                             uint8_t styleMask = 0x0F) const;
   bool releaseSdCardFontForLowMemory(int fontId) const;
 
   // Orientation control (affects logical width/height and coordinate transforms)
@@ -181,9 +183,7 @@ class GfxRenderer {
                   float cropY = 0) const;
   void drawBitmap1Bit(const Bitmap& bitmap, int x, int y, int maxWidth, int maxHeight) const;
   // Trapezoidal blit used by Flow/iPod-style carousels. Fits the bitmap into a
-  // bounding box of width `w` and height `max(hL, hR)` whose top-left is (x, y);
-  // each output column has its own height linearly interpolated from hL on the
-  // left edge to hR on the right edge, vertically centered in the bbox.
+  // bounding box of width `w` and height `max(hL, hR)` whose top-left is (x, y).
   void drawPerspectiveBitmap(const Bitmap& bitmap, int x, int y, int w, int hL, int hR) const;
   void fillPolygon(const int* xPoints, const int* yPoints, int numPoints, bool state = true) const;
 

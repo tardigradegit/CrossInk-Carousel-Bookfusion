@@ -116,8 +116,11 @@ void LyraTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
 
   // Battery moved to a thin top-of-screen bar (see BaseTheme::drawBatteryTopBar);
   // the corner icon is gone so the title and subtitle can share the full width
-  // of the header without having to dodge it.
-  drawBatteryTopBar(renderer);
+  // of the header without having to dodge it. Gated on the "Show battery"
+  // toggle so the setting actually hides the indicator.
+  if (SETTINGS.statusBarBattery) {
+    drawBatteryTopBar(renderer);
+  }
 
   int maxTitleWidth = title != nullptr ? renderer.getTextWidth(UI_12_FONT_ID, title, EpdFontFamily::BOLD) : 0;
   int maxSubtitleWidth =
@@ -160,9 +163,12 @@ void LyraTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
   if (subtitle) {
     auto truncatedSubtitle = renderer.truncatedText(SMALL_FONT_ID, subtitle, maxSubtitleWidth, EpdFontFamily::REGULAR);
     int truncatedSubtitleWidth = renderer.getTextWidth(SMALL_FONT_ID, truncatedSubtitle.c_str());
+    // Subtitle was at y=50, but with SMALL_FONT_ID line height ~12 the visible
+    // glyph bottom reaches ~y=60, overlapping the 3-px underline at y=57..59.
+    // Lift to y=44 so the glyphs sit just above the underline gap.
     renderer.drawText(SMALL_FONT_ID,
                       rect.x + rect.width - LyraMetrics::values.contentSidePadding - truncatedSubtitleWidth,
-                      rect.y + 50, truncatedSubtitle.c_str(), true);
+                      rect.y + 44, truncatedSubtitle.c_str(), true);
   }
 }
 
@@ -198,8 +204,16 @@ void LyraTheme::drawTabBar(const GfxRenderer& renderer, Rect rect, const std::ve
                            bool selected) const {
   int currentX = rect.x + LyraMetrics::values.contentSidePadding;
 
+  // Inset the full-width "active category" dither to match the underline
+  // gutter below, so the highlight no longer runs edge-to-edge while every
+  // other rule on the screen respects the screen-margin inset.
+  int oTop, oRight, oBottom, oLeft;
+  renderer.getOrientedViewableTRBL(&oTop, &oRight, &oBottom, &oLeft);
+  const int barInsetLeft = oLeft + SETTINGS.screenMargin;
+  const int barInsetRight = oRight + SETTINGS.screenMargin;
   if (selected) {
-    renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
+    renderer.fillRectDither(rect.x + barInsetLeft, rect.y,
+                            std::max(0, rect.width - barInsetLeft - barInsetRight), rect.height, Color::LightGray);
   }
 
   for (const auto& tab : tabs) {

@@ -188,6 +188,17 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     applyLegacyStatusBarSettings(s);
   }
 
+  // sleepTimeout (enum) → sleepTimeoutMinutes (1..30). When the new key is
+  // absent but the legacy key is present, translate the enum to minutes so
+  // returning users keep their previous timeout instead of resetting to 10.
+  if (doc["sleepTimeoutMinutes"].isNull() && !doc["sleepTimeout"].isNull()) {
+    const uint8_t legacyValue =
+        clamp(doc["sleepTimeout"] | (uint8_t)CrossPointSettings::SLEEP_10_MIN, CrossPointSettings::SLEEP_TIMEOUT_COUNT,
+              (uint8_t)CrossPointSettings::SLEEP_10_MIN);
+    s.sleepTimeoutMinutes = CrossPointSettings::sleepTimeoutEnumToMinutes(legacyValue);
+    if (needsResave) *needsResave = true;
+  }
+
   for (const auto& info : getSettingsList()) {
     if (!info.key) continue;
     // Dynamic entries (KOReader etc.) are stored in their own files — skip.
@@ -273,42 +284,9 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
 }
 
 // ---- KOReaderCredentialStore ----
-
-bool JsonSettingsIO::saveKOReader(const KOReaderCredentialStore& store, const char* path) {
-  JsonDocument doc;
-  doc["username"] = store.getUsername();
-  doc["password_obf"] = obfuscation::obfuscateToBase64(store.getPassword());
-  doc["serverUrl"] = store.getServerUrl();
-  doc["matchMethod"] = static_cast<uint8_t>(store.getMatchMethod());
-
-  String json;
-  serializeJson(doc, json);
-  return Storage.writeFile(path, json);
-}
-
-bool JsonSettingsIO::loadKOReader(KOReaderCredentialStore& store, const char* json, bool* needsResave) {
-  if (needsResave) *needsResave = false;
-  JsonDocument doc;
-  auto error = deserializeJson(doc, json);
-  if (error) {
-    LOG_ERR("KRS", "JSON parse error: %s", error.c_str());
-    return false;
-  }
-
-  store.username = doc["username"] | std::string("");
-  bool ok = false;
-  store.password = obfuscation::deobfuscateFromBase64(doc["password_obf"] | "", &ok);
-  if (!ok || store.password.empty()) {
-    store.password = doc["password"] | std::string("");
-    if (!store.password.empty() && needsResave) *needsResave = true;
-  }
-  store.serverUrl = doc["serverUrl"] | std::string("");
-  uint8_t method = doc["matchMethod"] | (uint8_t)0;
-  store.matchMethod = static_cast<DocumentMatchMethod>(method);
-
-  LOG_DBG("KRS", "Loaded KOReader credentials for user: %s", store.username.c_str());
-  return true;
-}
+// load/save moved into KOReaderCredentialStore + KOReaderJsonIO (upstream
+// v1.2.11 refactor). JsonSettingsIO no longer needs to reach into private
+// store fields — call KOREADER_STORE.loadFromFile()/saveToFile() directly.
 
 // ---- WifiCredentialStore ----
 

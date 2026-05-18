@@ -37,6 +37,7 @@
 #include "RecentBooksStore.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
+#include "SdCardFontGlobals.h"
 #include "fontIds.h"
 #include "util/ScreenshotUtil.h"
 
@@ -47,6 +48,20 @@ constexpr uint16_t DEFAULT_AUTO_PAGE_TURN_INTERVAL_S = 30;
 constexpr uint16_t MIN_AUTO_PAGE_TURN_INTERVAL_S = 5;
 constexpr uint16_t MAX_AUTO_PAGE_TURN_INTERVAL_S = 120;
 constexpr int MAX_PAGE_LOAD_RETRIES = 3;
+
+void drawToast(const GfxRenderer& renderer, const char* msg) {
+  constexpr int toastPadX = 20;
+  constexpr int toastPadY = 12;
+  const int msgW = renderer.getTextWidth(UI_10_FONT_ID, msg);
+  const int msgH = renderer.getLineHeight(UI_10_FONT_ID);
+  const int toastW = msgW + toastPadX * 2;
+  const int toastH = msgH + toastPadY * 2;
+  const int toastX = (renderer.getScreenWidth() - toastW) / 2;
+  const int toastY = (renderer.getScreenHeight() - toastH) / 2;
+  renderer.fillRect(toastX, toastY, toastW, toastH, true);
+  renderer.drawText(UI_10_FONT_ID, toastX + toastPadX, toastY + toastPadY, msg, false);
+  renderer.displayBuffer();
+}
 
 int clampPercent(int percent) {
   if (percent < 0) {
@@ -482,10 +497,15 @@ void EpubReaderActivity::loop() {
     const bool bottomLongPressed =
         longPressReady && (mappedInput.isPressed(MappedInputManager::Button::Down) || bottomReleased);
 
+    // Font size: on X4 the side rocker reads vertically, so "top = larger"
+    // matches a volume-rocker mental model. On X3 the same logical Up is the
+    // *left* side button, where "left = decrease" is the intuitive read;
+    // flip the sign so the X3 left button shrinks the font.
+    const bool topMeansLarger = !mappedInput.isX3Device();
     if (!sideButtonLongPressHandled && topLongPressed) {
       sideButtonLongPressHandled = !topReleased;
       if (sideLongPressChangesFont) {
-        if (SETTINGS.changeReaderFontSize(/*larger=*/true)) {
+        if (SETTINGS.changeReaderFontSize(/*larger=*/topMeansLarger)) {
           reindexCurrentSection();
         }
       } else {
@@ -497,7 +517,7 @@ void EpubReaderActivity::loop() {
     if (!sideButtonLongPressHandled && bottomLongPressed) {
       sideButtonLongPressHandled = !bottomReleased;
       if (sideLongPressChangesFont) {
-        if (SETTINGS.changeReaderFontSize(/*larger=*/false)) {
+        if (SETTINGS.changeReaderFontSize(/*larger=*/!topMeansLarger)) {
           reindexCurrentSection();
         }
       } else {
@@ -556,9 +576,12 @@ void EpubReaderActivity::loop() {
         return;
       }
 
+      // Left rotates CCW, right rotates CW — matches the visual arrow
+      // direction of the button and the side-button orientation handler
+      // (Up=Left side button on X3 → CCW). Previous code had this inverted.
       const uint8_t newOrientation = nextLongPressed
-                                         ? ReaderUtils::rotatedOrientation(SETTINGS.orientation, /*clockwise=*/false)
-                                         : ReaderUtils::rotatedOrientation(SETTINGS.orientation, /*clockwise=*/true);
+                                         ? ReaderUtils::rotatedOrientation(SETTINGS.orientation, /*clockwise=*/true)
+                                         : ReaderUtils::rotatedOrientation(SETTINGS.orientation, /*clockwise=*/false);
       applyOrientation(newOrientation);
       requestUpdate();
       return;
@@ -612,9 +635,11 @@ void EpubReaderActivity::loop() {
   }
 
   if (longPress && !fromSideBtn && SETTINGS.longPressButtonBehavior == CrossPointSettings::ORIENTATION_CHANGE) {
+    // Right (next) rotates CW (+1), left (prev) rotates CCW (-1) — arrow
+    // direction matches rotation direction. Previously inverted.
     const uint8_t newOrientation =
-        nextTriggered ? (SETTINGS.orientation - 1 + SETTINGS.ORIENTATION_COUNT) % SETTINGS.ORIENTATION_COUNT
-                      : (SETTINGS.orientation + 1) % SETTINGS.ORIENTATION_COUNT;
+        nextTriggered ? (SETTINGS.orientation + 1) % SETTINGS.ORIENTATION_COUNT
+                      : (SETTINGS.orientation - 1 + SETTINGS.ORIENTATION_COUNT) % SETTINGS.ORIENTATION_COUNT;
     applyOrientation(newOrientation);
     requestUpdate();
     return;
@@ -777,6 +802,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       return;
     }
     case EpubReaderMenuActivity::MenuAction::DELETE_CACHE: {
+      bool cacheDeleted = false;
       {
         RenderLock lock(*this);
         if (epub && section) {
@@ -784,12 +810,18 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
           uint16_t backupPage = section->currentPage;
           uint16_t backupPageCount = section->pageCount;
           section.reset();
-          epub->clearCache();
+          cacheDeleted = epub->clearCache();
           epub->setupCacheDir();
           if (!saveProgress(backupSpine, backupPage, backupPageCount)) {
             LOG_ERR("ERS", "Failed to save progress before cache clear");
           }
+          if (cacheDeleted) {
+            drawToast(renderer, tr(STR_BOOK_CACHE_DELETED));
+          }
         }
+      }
+      if (cacheDeleted) {
+        delay(1000);
       }
       onGoHome();
       return;
@@ -921,12 +953,18 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       break;
     case EpubReaderMenuActivity::MenuAction::ROTATE_SCREEN:
     case EpubReaderMenuActivity::MenuAction::READER_OPTIONS:
+    case EpubReaderMenuActivity::MenuAction::CONTROLS_OPTIONS:
       break;
   }
 }
 
 void EpubReaderActivity::reindexCurrentSection() {
   SETTINGS.saveToFile();
+  // SD-card fonts need their advance/glyph state loaded BEFORE the render
+  // lock so layout measurement (which runs inside the lock) sees a ready
+  // font. Without this, in-reader font/size changes on SD-card fonts can
+  // leave EPUB layout pointing at stale metrics.
+  sdFontSystem.ensureLoaded(renderer);
   {
     RenderLock lock(*this);
     GUI.drawPopup(renderer, tr(STR_INDEXING));

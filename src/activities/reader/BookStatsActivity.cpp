@@ -15,8 +15,10 @@
 
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
+#include "activities/home/RecentBookProgress.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/ProgressRingUtil.h"
 
 namespace {
 
@@ -88,6 +90,11 @@ void BookStatsActivity::loadCurrent(int index) {
     currentStats = BookReadingStats::load(statsCachePathFor(e.path));
     useInitialStats = false;
   }
+
+  // Drive the title-row progress disc. RecentBookProgress::loadPercent reads
+  // the per-format progress.bin off SD, so we only run it on book change.
+  RecentBook ringEntry{e.path, e.title, e.author, e.coverBmpPath};
+  currentProgressPercent = RecentBookProgress::loadPercent(ringEntry);
 }
 
 void BookStatsActivity::onEnter() {
@@ -154,11 +161,29 @@ void BookStatsActivity::render(RenderLock&&) {
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, screenWidth, metrics.headerHeight}, "");
   {
     const int titleX = metrics.contentSidePadding;
-    // Match the title Y used by LyraTheme::drawHeader for every other page
-    // (topPadding + batteryBarHeight + 3) so this page lines up with the
-    // settings / file browser / etc. headers instead of sitting lower.
-    const int titleY = metrics.topPadding + metrics.batteryBarHeight + 3;
-    const int budget = screenWidth - 2 * metrics.contentSidePadding;
+    // Title shifted up 1 px from the LyraTheme default (+3) — visually the
+    // text was sitting closer to the underline than to the battery bar above
+    // it. drawText interprets `y` as the top of the bbox, but ascender +
+    // descender + leading make the visible glyph center sit slightly below
+    // that, so a -1 nudge brings the optical center to the middle.
+    const int titleY = metrics.topPadding + metrics.batteryBarHeight + 2;
+
+    // Pie-style progress ring on the right edge, mirrored padding from the
+    // right of the screen so it sits opposite the title's left padding.
+    // Center against the line (advanceY) rather than the ascender so the
+    // ring's optical center matches the text. Diameter +4, band +2 → 7-px.
+    const int lineH = renderer.getLineHeight(UI_12_FONT_ID);
+    const int discRadius = std::max(6, (lineH - 2) / 2 + 1);
+    constexpr int kDiscGap = 6;  // breathing room between text and disc
+    const int discRightEdge = screenWidth - metrics.contentSidePadding;
+    const int discCx = discRightEdge - discRadius;
+    const int discCy = titleY + lineH / 2;
+    ProgressRingUtil::drawProgressRing(renderer, discCx, discCy, discRadius, currentProgressPercent);
+
+    // Keep the title/author starting at contentSidePadding (unchanged). Just
+    // pull the text-width budget in by the disc footprint so long titles can't
+    // truncate into the disc.
+    const int budget = (screenWidth - 2 * metrics.contentSidePadding) - (2 * discRadius + kDiscGap);
     constexpr int gap = 12;  // separation between title and author
 
     const char* headerTitle = currentTitle.empty() ? tr(STR_READING_STATS) : currentTitle.c_str();

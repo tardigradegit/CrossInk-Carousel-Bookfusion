@@ -1,6 +1,7 @@
 #include "BaseTheme.h"
 
 #include <GfxRenderer.h>
+#include <HalGPIO.h>
 #include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <Logging.h>
@@ -130,7 +131,9 @@ void BaseTheme::drawBatteryTopBar(const GfxRenderer& renderer) {
   // screenHeight - 15 (3 px tall, so its bottom pixel is at screenHeight - 13,
   // leaving 12 px of empty space below it). Place this top bar 12 px below the
   // screen top so the gaps to the nearest screen edge match on both sides.
-  constexpr int barTopY = 12;
+  // X4 nudges the bar an extra 6 px down — the X4 panel has a slightly larger
+  // top bezel and a bigger top gap reads more balanced there. X3 keeps 12 px.
+  const int barTopY = gpio.deviceIsX4() ? 18 : 12;
   const int stripBottom = barTopY + batteryTopBarHeight;
   // Clear the full top strip (including the inset gutters and the new offset)
   // so percentage drops and orientation/inset changes don't leave ghost pixels.
@@ -388,7 +391,12 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
 void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* title, const char* subtitle) const {
   // Battery is now drawn as a thin bar at the very top of the screen instead
   // of a corner icon, so the title is free to use the full header width.
-  drawBatteryTopBar(renderer);
+  // Honor the user's "Show battery" toggle so disabling it actually hides
+  // the indicator on every menu/header page (previously the reader status
+  // bar was the only surface that respected this setting).
+  if (SETTINGS.statusBarBattery) {
+    drawBatteryTopBar(renderer);
+  }
 
   if (title) {
     auto truncatedTitle = renderer.truncatedText(UI_12_FONT_ID, title,

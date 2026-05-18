@@ -45,6 +45,9 @@ class BookStatsActivity final : public Activity {
   std::string currentAuthor;
   std::string currentCoverBmpPath;
   std::string currentBookPath;
+  // Reading-progress (0..100, or <0 if unknown) for the active book. Loaded
+  // alongside currentStats in loadCurrent() to keep render() cheap.
+  float currentProgressPercent = -1.0f;
 
   void buildNavList();
   void loadCurrent(int index);

@@ -11,20 +11,15 @@
 #include "fontIds.h"
 
 namespace {
-constexpr int MENU_ITEMS = 7;
+constexpr int MENU_ITEMS = 6;
 const StrId menuNames[MENU_ITEMS] = {StrId::STR_CHAPTER_PAGE_COUNT,
                                      StrId::STR_BOOK_PROGRESS_PERCENTAGE,
                                      StrId::STR_PROGRESS_BAR,
-                                     StrId::STR_PROGRESS_BAR_THICKNESS,
                                      StrId::STR_TITLE,
                                      StrId::STR_BATTERY,
                                      StrId::STR_XTC_STATUS_BAR};
 constexpr int PROGRESS_BAR_ITEMS = 3;
 const StrId progressBarNames[PROGRESS_BAR_ITEMS] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
-
-constexpr int PROGRESS_BAR_THICKNESS_ITEMS = 3;
-const StrId progressBarThicknessNames[PROGRESS_BAR_THICKNESS_ITEMS] = {
-    StrId::STR_PROGRESS_BAR_THIN, StrId::STR_PROGRESS_BAR_MEDIUM, StrId::STR_PROGRESS_BAR_THICK};
 
 constexpr int TITLE_ITEMS = 3;
 const StrId titleNames[TITLE_ITEMS] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
@@ -45,10 +40,6 @@ void StatusBarSettingsActivity::onEnter() {
   // Clamp statusBarProgressBar and statusBarTitle in case of corrupt/migrated data
   if (SETTINGS.statusBarProgressBar >= PROGRESS_BAR_ITEMS) {
     SETTINGS.statusBarProgressBar = CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS;
-  }
-
-  if (SETTINGS.statusBarTitle >= PROGRESS_BAR_THICKNESS_ITEMS) {
-    SETTINGS.statusBarTitle = CrossPointSettings::STATUS_BAR_PROGRESS_BAR_THICKNESS::PROGRESS_BAR_NORMAL;
   }
 
   if (SETTINGS.statusBarTitle >= TITLE_ITEMS) {
@@ -109,16 +100,12 @@ void StatusBarSettingsActivity::handleSelection() {
     // Progress Bar
     SETTINGS.statusBarProgressBar = (SETTINGS.statusBarProgressBar + 1) % PROGRESS_BAR_ITEMS;
   } else if (selectedIndex == 3) {
-    // Progress Bar Thickness
-    SETTINGS.statusBarProgressBarThickness =
-        (SETTINGS.statusBarProgressBarThickness + 1) % PROGRESS_BAR_THICKNESS_ITEMS;
-  } else if (selectedIndex == 4) {
     // Chapter Title
     SETTINGS.statusBarTitle = (SETTINGS.statusBarTitle + 1) % TITLE_ITEMS;
-  } else if (selectedIndex == 5) {
+  } else if (selectedIndex == 4) {
     // Show Battery
     SETTINGS.statusBarBattery = (SETTINGS.statusBarBattery + 1) % 2;
-  } else if (selectedIndex == 6) {
+  } else if (selectedIndex == 5) {
     // XTC Status Bar
     SETTINGS.xtcStatusBarMode = (SETTINGS.xtcStatusBarMode + 1) % XTC_STATUS_BAR_ITEMS;
   }
@@ -149,12 +136,10 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
         } else if (index == 2) {
           return I18N.get(progressBarNames[SETTINGS.statusBarProgressBar]);
         } else if (index == 3) {
-          return I18N.get(progressBarThicknessNames[SETTINGS.statusBarProgressBarThickness]);
-        } else if (index == 4) {
           return I18N.get(titleNames[SETTINGS.statusBarTitle]);
-        } else if (index == 5) {
+        } else if (index == 4) {
           return SETTINGS.statusBarBattery ? tr(STR_SHOW) : tr(STR_HIDE);
-        } else if (index == 6) {
+        } else if (index == 5) {
           return I18N.get(xtcStatusBarNames[SETTINGS.xtcStatusBarMode]);
         } else {
           return tr(STR_HIDE);

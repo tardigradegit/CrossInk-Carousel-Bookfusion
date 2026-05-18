@@ -184,7 +184,9 @@ void TxtReaderActivity::loop() {
     const bool nextLongPressed = longPressReady && mappedInput.isPressed(MappedInputManager::Button::Right);
     if (!frontButtonLongPressHandled && (prevLongPressed || nextLongPressed)) {
       frontButtonLongPressHandled = true;
-      SETTINGS.orientation = ReaderUtils::rotatedOrientation(SETTINGS.orientation, /*clockwise=*/prevLongPressed);
+      // Right (next) → CW, Left (prev) → CCW so the rotation matches the
+      // arrow on the button. Previously this was inverted.
+      SETTINGS.orientation = ReaderUtils::rotatedOrientation(SETTINGS.orientation, /*clockwise=*/nextLongPressed);
       SETTINGS.saveToFile();
       {
         RenderLock lock(*this);

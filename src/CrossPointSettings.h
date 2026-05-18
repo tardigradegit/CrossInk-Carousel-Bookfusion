@@ -190,23 +190,20 @@ class CrossPointSettings {
     LONG_PRESS_BUTTON_BEHAVIOR_COUNT
   };
 
-  // UI Theme. Our fork keeps LYRA_FLOW (= 3) and ROUNDEDRAFF (= 4); upstream's
-  // LYRA_CAROUSEL is preserved as a legacy enum value at the tail so any
-  // upstream code referencing it still compiles, but it's not registered as
-  // a selectable theme by default. Saved settings from v1.2.9.x continue to
-  // resolve to the right theme because numbering is unchanged.
+  // UI Theme. Our fork keeps LYRA_FLOW (= 3) and ROUNDEDRAFF (= 4). MINIMAL
+  // (= 5) is the upstream v1.2.11 personal theme. LYRA_CAROUSEL (= 6) is
+  // preserved at the tail as a legacy enum value so upstream code referencing
+  // it still compiles, but it is not exposed in the picker unless the
+  // CROSSINK_ENABLE_LYRA_CAROUSEL build flag is set.
   enum UI_THEME {
     CLASSIC = 0,
     LYRA = 1,
     LYRA_3_COVERS = 2,
     LYRA_FLOW = 3,
     ROUNDEDRAFF = 4,
-    LYRA_CAROUSEL = 5,
-#if defined(CROSSINK_ENABLE_LYRA_CAROUSEL) && CROSSINK_ENABLE_LYRA_CAROUSEL
-    UI_THEME_COUNT = 6
-#else
-    UI_THEME_COUNT = 5
-#endif
+    MINIMAL = 5,
+    LYRA_CAROUSEL = 6,
+    UI_THEME_COUNT = 7,
   };
   enum RECENT_BOOKS_VIEW { RECENT_BOOKS_LIST = 0, RECENT_BOOKS_GRID = 1, RECENT_BOOKS_VIEW_COUNT };
 
@@ -291,8 +288,9 @@ class CrossPointSettings {
   uint8_t fontSize = MEDIUM;
   uint8_t lineSpacing = NORMAL;
   uint8_t paragraphAlignment = JUSTIFIED;
-  // Auto-sleep timeout setting (default 10 minutes)
-  uint8_t sleepTimeout = SLEEP_10_MIN;
+  // Auto-sleep timeout setting (default 10 minutes). Legacy `sleepTimeout`
+  // enum values are migration-only — runtime + UI now use minutes directly.
+  uint8_t sleepTimeoutMinutes = 10;
   // E-ink refresh frequency (default 15 pages)
   uint8_t refreshFrequency = REFRESH_15;
   uint8_t hyphenationEnabled = 0;
@@ -341,6 +339,8 @@ class CrossPointSettings {
 
   static constexpr uint16_t POWER_BUTTON_WAKE_SHORT_MS = 10;
   static constexpr uint16_t POWER_BUTTON_LONG_PRESS_MS = 400;
+  static constexpr uint8_t MIN_SLEEP_TIMEOUT_MINUTES = 1;
+  static constexpr uint8_t MAX_SLEEP_TIMEOUT_MINUTES = 30;
 
   uint16_t getPowerButtonWakeDuration() const {
     return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? POWER_BUTTON_WAKE_SHORT_MS
@@ -369,6 +369,9 @@ class CrossPointSettings {
 
   static void validateFrontButtonMapping(CrossPointSettings& settings);
   static void validateReaderFrontButtonMapping(CrossPointSettings& settings);
+  // Migrates the legacy SLEEP_*_MIN enum value to the new 1–30 minute integer
+  // schema. Anything outside the legacy set defaults to 10 minutes.
+  static uint8_t sleepTimeoutEnumToMinutes(uint8_t legacyValue);
 
  private:
   bool loadFromBinaryFile();

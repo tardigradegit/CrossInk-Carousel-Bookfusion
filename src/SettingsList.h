@@ -121,7 +121,7 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
             "refreshFrequency", StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme,
                           {StrId::STR_THEME_CLASSIC, StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_EXTENDED,
-                           StrId::STR_THEME_FLOW, StrId::STR_THEME_ROUNDEDRAFF
+                           StrId::STR_THEME_FLOW, StrId::STR_THEME_ROUNDEDRAFF, StrId::STR_THEME_MINIMAL
 #if defined(CROSSINK_ENABLE_LYRA_CAROUSEL) && CROSSINK_ENABLE_LYRA_CAROUSEL
                            ,
                            StrId::STR_THEME_LYRA_CAROUSEL
@@ -230,9 +230,10 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                           "longPressMenuAction", StrId::STR_CAT_CONTROLS),
 
         // --- System ---
-        SettingInfo::Enum(StrId::STR_TIME_TO_SLEEP, &CrossPointSettings::sleepTimeout,
-                          {StrId::STR_MIN_1, StrId::STR_MIN_5, StrId::STR_MIN_10, StrId::STR_MIN_15, StrId::STR_MIN_30},
-                          "sleepTimeout", StrId::STR_CAT_SYSTEM),
+        SettingInfo::Value(
+            StrId::STR_TIME_TO_SLEEP, &CrossPointSettings::sleepTimeoutMinutes,
+            {CrossPointSettings::MIN_SLEEP_TIMEOUT_MINUTES, CrossPointSettings::MAX_SLEEP_TIMEOUT_MINUTES, 1},
+            "sleepTimeoutMinutes", StrId::STR_CAT_SYSTEM),
         SettingInfo::Toggle(StrId::STR_SHOW_HIDDEN_FILES, &CrossPointSettings::showHiddenFiles, "showHiddenFiles",
                             StrId::STR_CAT_SYSTEM),
         SettingInfo::Toggle(StrId::STR_MOVE_FINISHED_TO_READ, &CrossPointSettings::moveFinishedToReadFolder,
@@ -276,9 +277,6 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
         SettingInfo::Enum(StrId::STR_PROGRESS_BAR, &CrossPointSettings::statusBarProgressBar,
                           {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE}, "statusBarProgressBar",
                           StrId::STR_CUSTOMISE_STATUS_BAR),
-        SettingInfo::Enum(StrId::STR_PROGRESS_BAR_THICKNESS, &CrossPointSettings::statusBarProgressBarThickness,
-                          {StrId::STR_PROGRESS_BAR_THIN, StrId::STR_PROGRESS_BAR_MEDIUM, StrId::STR_PROGRESS_BAR_THICK},
-                          "statusBarProgressBarThickness", StrId::STR_CUSTOMISE_STATUS_BAR),
         SettingInfo::Enum(StrId::STR_TITLE, &CrossPointSettings::statusBarTitle,
                           {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE}, "statusBarTitle",
                           StrId::STR_CUSTOMISE_STATUS_BAR),

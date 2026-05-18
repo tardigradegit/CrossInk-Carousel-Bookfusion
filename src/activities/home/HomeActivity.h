@@ -6,11 +6,13 @@
 #include "../reader/BookReadingStats.h"
 #include "../reader/GlobalReadingStats.h"
 #include "./FileBrowserActivity.h"
+#include "util/ButtonNavigator.h"
 
 struct RecentBook;
 struct Rect;
 
 class HomeActivity final : public Activity {
+  ButtonNavigator buttonNavigator;
   int selectorIndex = 0;
   // Remembered carousel position so Left/Right re-entry from the menu lands
   // on the same book the user was last on, not back at index 0.
@@ -25,6 +27,22 @@ class HomeActivity final : public Activity {
   bool coverRendered = false;      // Track if cover has been rendered once
   bool coverBufferStored = false;  // Track if cover buffer is stored
   uint8_t* coverBuffer = nullptr;  // HomeActivity's own buffer for cover image
+  // Which carousel book the cached buffer was captured for. Render runs on a
+  // separate FreeRTOS task from loop(); if the user scrolls (mutating
+  // selectorIndex) while a render is in flight, the framebuffer that gets
+  // cached at the end of that render is for the OLD book. We tag the buffer
+  // with the idx it captured and invalidate at the start of the next render
+  // when it doesn't match the book about to be drawn.
+  int coverBufferBookIdx = -1;
+  int pendingCoverBufferBookIdx = -1;
+  // Minimal-theme home UX state (upstream parity). The Minimal home shows a
+  // 4-slot front-button hint row (MENU / BROWSE / SETTINGS / READ); pressing
+  // MENU opens an overlay containing buildMinimalMenuItems(). On theme switch
+  // away from Minimal these flags are harmlessly inert.
+  bool minimalMenuOpen = false;
+  int minimalMenuIndex = 0;
+  int minimalHomeNavIndex = -1;
+  bool minimalSuppressInitialFrontRelease = false;
   float currentBookProgressPercent = -1.0f;
   BookReadingStats currentBookStats;
   GlobalReadingStats globalStats;
@@ -40,6 +58,7 @@ class HomeActivity final : public Activity {
   // the carousel without on-demand file I/O.
   std::vector<float> recentBookProgress;
   void onSelectBook(const std::string& path);
+  void onContinueReading();
   void onFileBrowserOpen();
   void onRecentsOpen();
   void onSettingsOpen();

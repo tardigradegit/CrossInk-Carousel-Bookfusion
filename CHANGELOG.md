@@ -1,5 +1,32 @@
 # Changelog
 
+## [v1.2.11.1] - 2026-05-16
+
+### Added
+- Synced upstream CrossInk v1.2.11 + v1.2.11.1 fixes and features (Lyra Carousel theme skipped; Flow + Minimal are the two carousel themes).
+- New Minimal home theme — clean home page with one large cover, available alongside Flow.
+- In-reader **Controls** menu opens the full Settings → Controls list without exiting the book; in-reader Reader Options now exposes "Manage Fonts" and "Customise Status Bar" actions.
+- **Custom sleep timer picker** — `Time to Sleep` is now a 1–30-minute integer instead of fixed presets. Existing JSON settings migrate to the closest minute value; existing binary settings reset to 10 minutes on first boot.
+- BMP viewer now shows Prev/Next button hints and accepts both bottom-rocker and side-input directions.
+- KOReader Sync: long-press to clear all bookmarks, hold Select to delete a single bookmark.
+- File Browser: long-press a book to delete its cache or mark it Finished / Unfinished.
+- Custom font-manager actions split into "Download All" and "Update All" entries.
+- Confirmation toast when deleting a book's cache from the reader.
+
+### Changed
+- Web file-transfer filename byte limit raised from 100 → 150; uploads now preserve the original file extension.
+- Deep sleep entry now shuts WiFi down before waiting on the power-button release.
+- Settings: removed the "Progress Bar Thickness" option (no longer adjustable).
+- Settings: "Show Battery" toggle now actually hides/shows the top battery bar on every menu surface.
+- X4 only: top battery bar moved 4 px lower for better balance with the wider top bezel.
+
+### Fixed
+- Landscape EPUB inline images no longer clip when the bottom edge overlaps the screen margin.
+- SD-card font picker no longer reopens after selection; in-reader font-size changes now rebuild the page layout correctly.
+- KOReader Sync: authentication and parsing fixes for Calibre-Web-Automated and other non-strict servers.
+- EPUB rendering: characters from unsupported charsets no longer overlap; advance-table and prewarm now degrade gracefully under low memory.
+- JPEG decoder: heap-aware allocation via `unique_ptr`, wider rendering envelope, progressive-JPEG detection.
+
 ## [v1.2.10] - 2026-05-11
 
 ### Added

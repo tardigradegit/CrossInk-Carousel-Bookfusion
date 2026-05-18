@@ -63,8 +63,11 @@ void RoundedRaffTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const 
   const int titleY = rect.y + 14;
 
   // Battery is drawn as a thin top-of-screen bar across every theme on this
-  // fork (see BaseTheme::drawBatteryTopBar). Keep RoundedRaff consistent.
-  drawBatteryTopBar(renderer);
+  // fork (see BaseTheme::drawBatteryTopBar). Keep RoundedRaff consistent
+  // and gate on the "Show battery" toggle.
+  if (SETTINGS.statusBarBattery) {
+    drawBatteryTopBar(renderer);
+  }
 
   const int maxTextWidth = std::max(0, rect.width - 2 * sidePadding);
   auto headerTitle = renderer.truncatedText(kTitleFontId, title, maxTextWidth, EpdFontFamily::BOLD);

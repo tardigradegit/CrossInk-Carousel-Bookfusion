@@ -12,10 +12,15 @@
 #include "components/themes/lyra/Lyra3CoversTheme.h"
 #include "components/themes/lyra/LyraFlowTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
+#include "components/themes/minimal/MinimalTheme.h"
 #include "components/themes/roundedraff/RoundedRaffTheme.h"
 
 namespace {
 constexpr int SKIP_PAGE_MS = 700;
+constexpr char kWidthPlaceholder[] = "[WIDTH]";
+constexpr char kHeightPlaceholder[] = "[HEIGHT]";
+constexpr size_t kWidthPlaceholderLength = sizeof(kWidthPlaceholder) - 1;
+constexpr size_t kHeightPlaceholderLength = sizeof(kHeightPlaceholder) - 1;
 }  // namespace
 
 UITheme UITheme::instance;
@@ -57,6 +62,17 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       currentTheme = std::make_unique<LyraFlowTheme>();
       currentMetrics = &LyraFlowMetrics::values;
       break;
+    case CrossPointSettings::UI_THEME::MINIMAL:
+      LOG_DBG("UI", "Using Minimal theme");
+      currentTheme = std::make_unique<MinimalTheme>();
+      currentMetrics = &MinimalMetrics::values;
+      break;
+    case CrossPointSettings::UI_THEME::LYRA_CAROUSEL:
+    default:
+      LOG_ERR("UI", "Unknown / unregistered theme %d, falling back to Classic", static_cast<int>(type));
+      currentTheme = std::make_unique<BaseTheme>();
+      currentMetrics = &BaseMetrics::values;
+      break;
   }
 }
 
@@ -78,13 +94,56 @@ int UITheme::getNumberOfItemsPerPage(const GfxRenderer& renderer, bool hasHeader
   return availableHeight / rowHeight;
 }
 
-std::string UITheme::getCoverThumbPath(const std::string& coverBmpPathIn, int coverHeight) {
-  std::string coverBmpPath = coverBmpPathIn;
-  size_t pos = coverBmpPath.find("[HEIGHT]", 0);
-  if (pos != std::string::npos) {
-    coverBmpPath.replace(pos, 8, std::to_string(coverHeight));
+std::string UITheme::getCoverThumbPath(const std::string& coverBmpPath, int coverHeight) {
+  if (coverHeight <= 0) {
+    return "";
   }
-  return coverBmpPath;
+  // Use int64_t so large heights cannot overflow before division.
+  const int coverWidth = static_cast<int>((static_cast<int64_t>(coverHeight) * 3 + 2) / 5);
+  return getCoverThumbPath(coverBmpPath, coverWidth, coverHeight);
+}
+
+std::string UITheme::getCoverThumbPath(const std::string& coverBmpPath, int width, int height) {
+  if (width <= 0 || height <= 0) {
+    return "";
+  }
+  const size_t initialWidthPos = coverBmpPath.find(kWidthPlaceholder, 0);
+  const size_t initialHeightPos = coverBmpPath.find(kHeightPlaceholder, 0);
+  const bool hasWidthPlaceholder = initialWidthPos != std::string::npos;
+  const bool hasHeightPlaceholder = initialHeightPos != std::string::npos;
+
+  if (!hasWidthPlaceholder && !hasHeightPlaceholder) {
+    return coverBmpPath;
+  }
+  if ((hasWidthPlaceholder &&
+       coverBmpPath.find(kWidthPlaceholder, initialWidthPos + kWidthPlaceholderLength) != std::string::npos) ||
+      (hasHeightPlaceholder &&
+       coverBmpPath.find(kHeightPlaceholder, initialHeightPos + kHeightPlaceholderLength) != std::string::npos)) {
+    return "";
+  }
+  if (!hasHeightPlaceholder) {
+    return "";
+  }
+
+  std::string thumbPath = coverBmpPath;
+  size_t widthPos = thumbPath.find(kWidthPlaceholder, 0);
+  if (widthPos != std::string::npos) {
+    thumbPath.replace(widthPos, kWidthPlaceholderLength, std::to_string(width));
+  }
+  size_t pos = thumbPath.find(kHeightPlaceholder, 0);
+  if (pos != std::string::npos) {
+    if (hasWidthPlaceholder) {
+      thumbPath.replace(pos, kHeightPlaceholderLength, std::to_string(height));
+    } else {
+      std::string legacyPath = thumbPath;
+      legacyPath.replace(pos, kHeightPlaceholderLength, std::to_string(height));
+      thumbPath.replace(pos, kHeightPlaceholderLength, std::to_string(width) + "x" + std::to_string(height));
+      if (!Storage.exists(thumbPath.c_str()) && Storage.exists(legacyPath.c_str())) {
+        return legacyPath;
+      }
+    }
+  }
+  return thumbPath;
 }
 
 UIIcon UITheme::getFileIcon(const std::string& filename) {

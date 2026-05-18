@@ -11,10 +11,12 @@
 #include <algorithm>
 
 #include "MappedInputManager.h"
+#include "RecentBookProgress.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "components/icons/book.h"
 #include "fontIds.h"
+#include "util/ProgressRingUtil.h"
 
 void RecentBooksGridActivity::loadRecentBooks() {
   recentBooks.clear();
@@ -166,8 +168,36 @@ void RecentBooksGridActivity::render(RenderLock&&) {
   if (selectorIndex < recentBooks.size()) {
     const auto& sel = recentBooks[selectorIndex];
     const int titleX = metrics.contentSidePadding;
-    const int titleY = metrics.topPadding + metrics.batteryBarHeight + 3;
-    const int budget = pageWidth - metrics.contentSidePadding * 2;
+    // Title shifted up 1 px from the LyraTheme default (+3) — visually the
+    // text was sitting closer to the underline than to the battery bar above
+    // it. drawText interprets `y` as the top of the bbox, but ascender +
+    // descender + leading make the visible glyph center sit slightly below
+    // that, so a -1 nudge brings the optical center to the middle.
+    const int titleY = metrics.topPadding + metrics.batteryBarHeight + 2;
+
+    // Pie-style progress ring on the right edge, mirrored padding from the
+    // right of the screen so it sits opposite the title's left padding.
+    if (cachedProgressIndex != selectorIndex) {
+      cachedProgressPercent = RecentBookProgress::loadPercent(sel);
+      cachedProgressIndex = selectorIndex;
+    }
+    // Center the ring against the line (advanceY) rather than the ascender
+    // height — ascender misses the descender + leading, which would pull the
+    // ring's optical center up by ~2 px and make it sit closer to the top
+    // bar than the bottom bar. Diameter bumped by +4 (radius +2) and band
+    // thickness +2 to a 7-px band, both per the design tweak.
+    const int lineH = renderer.getLineHeight(UI_12_FONT_ID);
+    const int discRadius = std::max(6, (lineH - 2) / 2 + 1);
+    constexpr int kDiscGap = 6;  // breathing room between text and disc
+    const int discRightEdge = pageWidth - metrics.contentSidePadding;
+    const int discCx = discRightEdge - discRadius;
+    const int discCy = titleY + lineH / 2;
+    ProgressRingUtil::drawProgressRing(renderer, discCx, discCy, discRadius, cachedProgressPercent);
+
+    // Keep the title/author starting at contentSidePadding (unchanged). Just
+    // pull the text-width budget in by the disc footprint so long titles can't
+    // truncate into the disc.
+    const int budget = (pageWidth - metrics.contentSidePadding * 2) - (2 * discRadius + kDiscGap);
     constexpr int gap = 12;  // separation between title and author
 
     const int authorRawW = sel.author.empty()
@@ -200,10 +230,12 @@ void RecentBooksGridActivity::render(RenderLock&&) {
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   constexpr int columns = 3;
-  // Single 8 px gap reused for column AND row spacing so the grid is
-  // symmetric and the 210-tall covers leave just enough room above the
-  // page-indicator dots: 81 + 3·210 + 2·8 = 727.
-  constexpr int gridSpacing = 8;
+  // 14 px gap reused for column AND row spacing — sized in tandem with the
+  // 136×204 COVER_WIDTH/COVER_HEIGHT so the total grid width stays at
+  // 3·136 + 2·14 = 436 (identical to the previous 140-wide + 8-gap layout).
+  // Covers come out a touch smaller; the extra 6 px goes to breathing room
+  // between them.
+  constexpr int gridSpacing = 14;
   const int rowSpacing = gridSpacing;
   const int totalGridWidth = columns * COVER_WIDTH + (columns - 1) * gridSpacing;
   const int startXOffset = (pageWidth - totalGridWidth) / 2;

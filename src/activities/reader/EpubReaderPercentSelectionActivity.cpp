@@ -51,8 +51,17 @@ void EpubReaderPercentSelectionActivity::loop() {
   buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Left}, [this] { adjustPercent(-kSmallStep); });
   buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Right}, [this] { adjustPercent(kSmallStep); });
 
-  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Up}, [this] { adjustPercent(kLargeStep); });
-  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Down}, [this] { adjustPercent(-kLargeStep); });
+  // Side input is logically Up/Down regardless of device. On X4 the side
+  // rocker is vertical, so "Up = increase" reads like a volume rocker. On
+  // X3 the same logical buttons are two horizontal side buttons where the
+  // left one (BTN_UP) physically suggests "back/decrease"; flipping the
+  // sign on X3 gives the X3 user the expected left=decrease/right=increase
+  // behavior without changing X4's muscle memory.
+  const int largeSign = mappedInput.isX3Device() ? -1 : 1;
+  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Up},
+                                       [this, largeSign] { adjustPercent(largeSign * kLargeStep); });
+  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Down},
+                                       [this, largeSign] { adjustPercent(-largeSign * kLargeStep); });
 }
 
 void EpubReaderPercentSelectionActivity::render(RenderLock&&) {

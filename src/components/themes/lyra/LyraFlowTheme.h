@@ -14,12 +14,12 @@ constexpr ThemeMetrics values = [] {
   // X3-tuned values: cover (392 tall) + tight progress bar + title + author.
   // The rect bottom is laid out to match the home menu icon-strip top
   // (HomeActivity computes that at pageHeight − buttonHintsHeight − 16 −
-  // iconCellSize = 792 − 40 − 16 − 64 = 672; with topPadding = 41 the rect
-  // height that aligns to it is 672 − 41 = 631). Centering title/author
-  // inside the rect therefore equals centering them between the progress
-  // bar and the menu.
+  // iconCellSize = 792 − 40 − 16 − 56 = 680; with topPadding = 41 the rect
+  // height that aligns to it is 680 − 41 = 639). Centering title/author
+  // inside the rect therefore equals centering them between the time row
+  // and the menu icon-strip top.
   v.homeCoverHeight = 392;
-  v.homeCoverTileHeight = 631;
+  v.homeCoverTileHeight = 639;
   v.homeRecentBooksCount = 5;    // matches the 5 carousel slots visible at once
                                  // (center + 2 sides each direction). Capped at 5 to
                                  // avoid first-boot OOM during sequential thumb gen on

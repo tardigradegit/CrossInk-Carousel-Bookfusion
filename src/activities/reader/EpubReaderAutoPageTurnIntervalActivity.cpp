@@ -55,8 +55,13 @@ void EpubReaderAutoPageTurnIntervalActivity::loop() {
 
   buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Left}, [this] { adjustSeconds(-kSmallStep); });
   buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Right}, [this] { adjustSeconds(kSmallStep); });
-  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Up}, [this] { adjustSeconds(kLargeStep); });
-  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Down}, [this] { adjustSeconds(-kLargeStep); });
+  // Same X3-vs-X4 split as the percent slider: X4 keeps the volume-rocker
+  // "Up = increase" mapping; X3 flips it so the left side button decreases.
+  const int largeSign = mappedInput.isX3Device() ? -1 : 1;
+  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Up},
+                                       [this, largeSign] { adjustSeconds(largeSign * kLargeStep); });
+  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Down},
+                                       [this, largeSign] { adjustSeconds(-largeSign * kLargeStep); });
 }
 
 void EpubReaderAutoPageTurnIntervalActivity::render(RenderLock&&) {

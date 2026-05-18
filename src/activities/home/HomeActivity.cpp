@@ -21,6 +21,7 @@
 
 #include "../reader/BookReadingStats.h"
 #include "../reader/BookStatsActivity.h"
+#include "AppVersion.h"
 #include "BookmarkStore.h"
 #include "BookmarksHomeActivity.h"
 #include "CrossPointSettings.h"
@@ -31,14 +32,93 @@
 #include "components/UITheme.h"
 #include "components/icons/chart.h"
 #include "components/icons/folder.h"
+#include "components/icons/library.h"
 #include "components/icons/recent.h"
 #include "components/icons/settings2.h"
 #include "components/icons/transfer.h"
+#include "components/themes/minimal/MinimalTheme.h"
 #include "fontIds.h"
 
 namespace {
 constexpr uint32_t TXT_CACHE_MAGIC = 0x54585449;  // "TXTI"
 constexpr uint8_t TXT_CACHE_VERSION = 2;
+
+// Home-menu plumbing for non-Flow themes. Flow keeps its bespoke 6-item
+// horizontal icon strip (rendered inline in HomeActivity::render); every
+// other theme defers to GUI.drawButtonMenu with a dynamic list mirroring
+// upstream CrossInk's buildHomeMenuItems pattern: items that depend on user
+// state (OPDS servers configured, reading stats present, bookmarks saved)
+// appear conditionally.
+enum class HomeMenuAction {
+  BrowseFiles,
+  RecentBooks,
+  OpdsBrowser,
+  ReadingStats,
+  Bookmarks,
+  FileTransfer,
+  Settings,
+};
+
+struct HomeMenuItem {
+  const char* label;
+  UIIcon icon;
+  HomeMenuAction action;
+};
+
+std::vector<HomeMenuItem> buildHomeMenuItems(bool hasOpdsServers, bool hasReadingStats, bool hasBookmarks) {
+  std::vector<HomeMenuItem> items = {
+      {tr(STR_BROWSE_FILES), Folder, HomeMenuAction::BrowseFiles},
+      {tr(STR_MENU_RECENT_BOOKS), Recent, HomeMenuAction::RecentBooks},
+  };
+  if (hasOpdsServers) {
+    items.push_back({tr(STR_OPDS_BROWSER), Library, HomeMenuAction::OpdsBrowser});
+  }
+  if (hasReadingStats) {
+    items.push_back({tr(STR_READING_STATS), Chart, HomeMenuAction::ReadingStats});
+  }
+  if (hasBookmarks) {
+    items.push_back({tr(STR_BOOKMARKS), BookmarkIcon, HomeMenuAction::Bookmarks});
+  }
+  items.push_back({tr(STR_FILE_TRANSFER), Transfer, HomeMenuAction::FileTransfer});
+  items.push_back({tr(STR_SETTINGS_TITLE), Settings, HomeMenuAction::Settings});
+  return items;
+}
+
+bool isFlowTheme() {
+  return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_FLOW;
+}
+
+bool isMinimalTheme() {
+  return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::MINIMAL;
+}
+
+// Minimal home overlay menu — order/contents differ slightly from
+// buildHomeMenuItems: Settings is excluded (mapped to a front-button hint
+// slot instead), Bookmarks reorders before Reading Stats.
+std::vector<HomeMenuItem> buildMinimalMenuItems(bool hasOpdsServers, bool hasReadingStats, bool hasBookmarks) {
+  std::vector<HomeMenuItem> items = {
+      {tr(STR_MENU_RECENT_BOOKS), Recent, HomeMenuAction::RecentBooks},
+  };
+  if (hasOpdsServers) {
+    items.push_back({tr(STR_OPDS_BROWSER), Library, HomeMenuAction::OpdsBrowser});
+  }
+  if (hasBookmarks) {
+    items.push_back({tr(STR_BOOKMARKS), BookmarkIcon, HomeMenuAction::Bookmarks});
+  }
+  if (hasReadingStats) {
+    items.push_back({tr(STR_READING_STATS), Chart, HomeMenuAction::ReadingStats});
+  }
+  items.push_back({tr(STR_FILE_TRANSFER), Transfer, HomeMenuAction::FileTransfer});
+  return items;
+}
+
+bool isAnyFrontButtonPressed(const MappedInputManager& mappedInput) {
+  return mappedInput.isFrontButtonPressed(HalGPIO::BTN_BACK) ||
+         mappedInput.isFrontButtonPressed(HalGPIO::BTN_CONFIRM) ||
+         mappedInput.isFrontButtonPressed(HalGPIO::BTN_LEFT) || mappedInput.isFrontButtonPressed(HalGPIO::BTN_RIGHT);
+}
+
+int minimalHomeNavCount(bool hasCurrentBook) { return hasCurrentBook ? 4 : 3; }
 
 // Draw a 1-bit packed icon scaled with nearest-neighbor blocks. drawIcon
 // doesn't scale, and baking pre-scaled assets into flash would balloon their
@@ -343,6 +423,13 @@ void HomeActivity::onEnter() {
 
   selectorIndex = 0;
 
+  // Minimal-theme state: swallow the first front-button release after
+  // entering home so a long-press exit from the reader doesn't immediately
+  // re-trigger the first Minimal nav slot.
+  minimalMenuOpen = false;
+  minimalHomeNavIndex = -1;
+  minimalSuppressInitialFrontRelease = isMinimalTheme();
+
   const auto& metrics = UITheme::getInstance().getMetrics();
   loadRecentBooks(metrics.homeRecentBooksCount);
 
@@ -407,6 +494,12 @@ bool HomeActivity::storeCoverBuffer() {
   }
 
   memcpy(coverBuffer, frameBuffer, bufferSize);
+  // Tag the buffer with the carousel idx render() snapshotted before drawing,
+  // so a subsequent render can detect that we cached for book X even though
+  // the user has since scrolled to book Y. pendingCoverBufferBookIdx is set
+  // by render() just before invoking the theme; it never reads live
+  // selectorIndex here because that may have moved during the draw.
+  coverBufferBookIdx = pendingCoverBufferBookIdx;
   return true;
 }
 
@@ -431,17 +524,180 @@ void HomeActivity::freeCoverBuffer() {
     coverBuffer = nullptr;
   }
   coverBufferStored = false;
+  coverBufferBookIdx = -1;
 }
 
 void HomeActivity::loop() {
   const int recentCount = static_cast<int>(recentBooks.size());
+
+  // Minimal theme: front-button hint slots (MENU/BROWSE/SETTINGS/READ) act
+  // as direct actions; pressing MENU opens an overlay containing
+  // buildMinimalMenuItems. Upstream's exact pattern is preserved here.
+  if (isMinimalTheme()) {
+    const int releasedFrontButton = mappedInput.getReleasedFrontButton();
+
+    if (minimalSuppressInitialFrontRelease) {
+      if (releasedFrontButton >= 0) {
+        minimalSuppressInitialFrontRelease = false;
+        return;
+      }
+      if (!isAnyFrontButtonPressed(mappedInput)) {
+        minimalSuppressInitialFrontRelease = false;
+      }
+    }
+
+    if (minimalMenuOpen) {
+      const auto frameHasReadingStats = hasReadingStats || hasAnyGlobalStats(globalStats);
+      const auto menuItems = buildMinimalMenuItems(hasOpdsServers, frameHasReadingStats, hasBookmarks);
+      const int menuCount = static_cast<int>(menuItems.size());
+      if (menuCount <= 0) {
+        minimalMenuOpen = false;
+        minimalHomeNavIndex = -1;
+        requestUpdate();
+        return;
+      }
+      if (minimalMenuIndex >= menuCount) {
+        minimalMenuIndex = menuCount - 1;
+      }
+      buttonNavigator.onPreviousPress([this, menuCount] {
+        minimalMenuIndex = ButtonNavigator::previousIndex(minimalMenuIndex, menuCount);
+        requestUpdate();
+      });
+      buttonNavigator.onNextPress([this, menuCount] {
+        minimalMenuIndex = ButtonNavigator::nextIndex(minimalMenuIndex, menuCount);
+        requestUpdate();
+      });
+      if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+        minimalMenuOpen = false;
+        minimalHomeNavIndex = -1;
+        requestUpdate();
+        return;
+      }
+      if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+        switch (menuItems[minimalMenuIndex].action) {
+          case HomeMenuAction::BrowseFiles: onFileBrowserOpen(); break;
+          case HomeMenuAction::RecentBooks: onRecentsOpen(); break;
+          case HomeMenuAction::OpdsBrowser: onOpdsBrowserOpen(); break;
+          case HomeMenuAction::ReadingStats: onReadingStatsOpen(); break;
+          case HomeMenuAction::Bookmarks: onBookmarksOpen(); break;
+          case HomeMenuAction::FileTransfer: onFileTransferOpen(); break;
+          case HomeMenuAction::Settings: onSettingsOpen(); break;
+        }
+      }
+      return;
+    }
+
+    // Home screen with the 4-slot front-button hint row. Index 0 = MENU,
+    // 1 = BROWSE, 2 = SETTINGS, 3 = READ (only present when there's a book).
+    const int homeNavCount = minimalHomeNavCount(!recentBooks.empty());
+    if (minimalHomeNavIndex >= homeNavCount) {
+      minimalHomeNavIndex = homeNavCount - 1;
+    }
+
+    if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
+      minimalHomeNavIndex = minimalHomeNavIndex < 0
+                                ? homeNavCount - 1
+                                : ButtonNavigator::previousIndex(minimalHomeNavIndex, homeNavCount);
+      requestUpdate();
+      return;
+    }
+    if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
+      minimalHomeNavIndex =
+          minimalHomeNavIndex < 0 ? 0 : ButtonNavigator::nextIndex(minimalHomeNavIndex, homeNavCount);
+      requestUpdate();
+      return;
+    }
+
+    auto activateMinimalHomeNav = [this](int index) {
+      switch (index) {
+        case 0:
+          minimalMenuOpen = true;
+          minimalMenuIndex = 0;
+          requestUpdate();
+          break;
+        case 1: onFileBrowserOpen(); break;
+        case 2: onSettingsOpen(); break;
+        case 3: onContinueReading(); break;
+      }
+    };
+
+    if (releasedFrontButton == HalGPIO::BTN_BACK) {
+      minimalHomeNavIndex = 0;
+      activateMinimalHomeNav(minimalHomeNavIndex);
+      return;
+    }
+    if (releasedFrontButton == HalGPIO::BTN_CONFIRM) {
+      minimalHomeNavIndex = 1;
+      activateMinimalHomeNav(minimalHomeNavIndex);
+      return;
+    }
+    if (releasedFrontButton == HalGPIO::BTN_LEFT) {
+      minimalHomeNavIndex = 2;
+      activateMinimalHomeNav(minimalHomeNavIndex);
+      return;
+    }
+    if (releasedFrontButton == HalGPIO::BTN_RIGHT) {
+      if (!recentBooks.empty()) {
+        minimalHomeNavIndex = 3;
+        activateMinimalHomeNav(minimalHomeNavIndex);
+      }
+      return;
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+      if (minimalHomeNavIndex >= 0) {
+        activateMinimalHomeNav(minimalHomeNavIndex);
+      }
+      return;
+    }
+    return;
+  }
+
+  // Non-Flow themes use upstream CrossInk's vertical-list navigation: a
+  // single ButtonNavigator cycles selectorIndex through (bookCount + menu
+  // items), Confirm dispatches by action. This block returns early so the
+  // rest of loop() — which is Flow-specific (carousel + horizontal strip
+  // split) — is skipped on those themes.
+  if (!isFlowTheme()) {
+    const auto frameHasReadingStats = hasReadingStats || hasAnyGlobalStats(globalStats);
+    const auto items = buildHomeMenuItems(hasOpdsServers, frameHasReadingStats, hasBookmarks);
+    const int totalCount = recentCount + static_cast<int>(items.size());
+    if (totalCount > 0) {
+      buttonNavigator.onNextRelease([this, totalCount] {
+        selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), totalCount);
+        requestUpdate();
+      });
+      buttonNavigator.onPreviousRelease([this, totalCount] {
+        selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), totalCount);
+        requestUpdate();
+      });
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+      if (static_cast<int>(selectorIndex) < recentCount) {
+        onSelectBook(recentBooks[selectorIndex].path);
+        return;
+      }
+      const int menuIdx = static_cast<int>(selectorIndex) - recentCount;
+      if (menuIdx < 0 || menuIdx >= static_cast<int>(items.size())) return;
+      switch (items[menuIdx].action) {
+        case HomeMenuAction::BrowseFiles: onFileBrowserOpen(); break;
+        case HomeMenuAction::RecentBooks: onRecentsOpen(); break;
+        case HomeMenuAction::OpdsBrowser: onOpdsBrowserOpen(); break;
+        case HomeMenuAction::ReadingStats: onReadingStatsOpen(); break;
+        case HomeMenuAction::Bookmarks: onBookmarksOpen(); break;
+        case HomeMenuAction::FileTransfer: onFileTransferOpen(); break;
+        case HomeMenuAction::Settings: onSettingsOpen(); break;
+      }
+    }
+    return;
+  }
+
   const bool inCarousel = static_cast<int>(selectorIndex) < recentCount;
 
-  // X3 layout: bottom rocker (Left/Right) cycles through the horizontal menu
-  // strip; side rocker (Up/Down) navigates the carousel. Pressing Left/Right
-  // from inside the carousel jumps to the menu (first or last icon); once in
-  // the menu, Left/Right wrap within the 6 icons. Up/Down brings the user
-  // back to the centered book.
+  // X3 Flow theme: bottom rocker (Left/Right) cycles through the horizontal
+  // menu strip; side rocker (Up/Down) navigates the carousel. Pressing
+  // Left/Right from inside the carousel jumps to the menu (first or last
+  // icon); once in the menu, Left/Right wrap within the 6 icons. Up/Down
+  // brings the user back to the centered book.
   constexpr int kHomeMenuCount = 6;
   if (mappedInput.wasReleased(MappedInputManager::Button::Right)) {
     if (inCarousel) {
@@ -495,7 +751,10 @@ void HomeActivity::loop() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     // Indices match the kHomeMenuItems array in render(): Recent / Stats /
-    // FileTransfer / Browse / Bookmarks / Settings.
+    // FileTransfer / Browse / Bookmarks-or-OPDS / Settings. Slot 4 is dynamic
+    // — it shows the OPDS browser when the user has any servers configured
+    // (kHomeMenuItems mirrors this), otherwise it opens Bookmarks. Default
+    // is Bookmarks.
     const int menuIdx = static_cast<int>(selectorIndex) - static_cast<int>(recentBooks.size());
     if (selectorIndex < recentBooks.size()) {
       onSelectBook(recentBooks[selectorIndex].path);
@@ -505,7 +764,7 @@ void HomeActivity::loop() {
         case 1: onReadingStatsOpen(); break;
         case 2: onFileTransferOpen(); break;
         case 3: onFileBrowserOpen(); break;
-        case 4: onBookmarksOpen(); break;
+        case 4: hasOpdsServers ? onOpdsBrowserOpen() : onBookmarksOpen(); break;
         case 5: onSettingsOpen(); break;
         default: break;
       }
@@ -517,6 +776,29 @@ void HomeActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
+
+  // Resolve which book the carousel should center on this frame up-front so
+  // we can detect a stale cached cover buffer (the user scrolled while the
+  // previous render was in flight on the render task). carouselDisplayIndex
+  // mirrors the encoding used below: in-carousel = selectorIndex; in-menu =
+  // recentCount + lastBookIndex so the same book stays centered.
+  const int recentCountInt = static_cast<int>(recentBooks.size());
+  const bool inMenuForCarousel = static_cast<int>(selectorIndex) >= recentCountInt;
+  const int carouselDisplayIndex =
+      (inMenuForCarousel && lastBookIndex >= 0 && lastBookIndex < recentCountInt)
+          ? recentCountInt + lastBookIndex
+          : static_cast<int>(selectorIndex);
+
+  // If the cached cover buffer was captured for a different book than the one
+  // we're about to draw, drop it. This catches the race where loop() (main
+  // task) advanced selectorIndex while the render task was mid-draw and the
+  // theme's end-of-render coverRendered=true overwrote the loop's
+  // coverRendered=false.
+  if (coverBufferStored && coverBufferBookIdx != carouselDisplayIndex) {
+    freeCoverBuffer();  // also resets coverBufferStored / coverBufferBookIdx
+    coverRendered = false;
+  }
+  pendingCoverBufferBookIdx = carouselDisplayIndex;
 
   renderer.clearScreen();
   bool bufferRestored = coverBufferStored && restoreCoverBuffer();
@@ -536,23 +818,18 @@ void HomeActivity::render(RenderLock&&) {
                                      &orientedMarginLeft);
     const int rightInset = orientedMarginRight + SETTINGS.screenMargin;
     const int pctWidth = renderer.getTextWidth(SMALL_FONT_ID, pctBuf);
-    const int pctY = 18;  // battery bar bottom at y=14; 4 px gap below it
+    // Battery bar top is y=12 on X3, y=18 on X4 (per BaseTheme::drawBatteryTopBar).
+    // Bar is 3 px tall, so its bottom row sits at barTopY+2. Place the
+    // percentage text 3 px below the bar bottom on both devices so the gap
+    // is identical — the X4 just gets a larger absolute offset because the
+    // bar itself is lower.
+    const int pctY = gpio.deviceIsX4() ? 24 : 18;
     renderer.drawText(SMALL_FONT_ID, pageWidth - rightInset - pctWidth, pctY, pctBuf, true);
   }
 
-  // When the user has navigated up/down into the menu, selectorIndex points
-  // at a menu row (>= recentCount). The carousel's "no selection" branch
-  // would otherwise pin to book 0 (most recent), losing the user's place.
-  // Encode the preferred center as (recentCount + lastBookIndex) so themes
-  // that scroll through covers (LyraFlowTheme) can keep that book centered;
-  // single-cover themes still see "selectorIndex != 0" → no selection drawn,
-  // unchanged behavior.
-  const int recentCountInt = static_cast<int>(recentBooks.size());
-  const bool inMenuForCarousel = static_cast<int>(selectorIndex) >= recentCountInt;
-  const int carouselDisplayIndex =
-      (inMenuForCarousel && lastBookIndex >= 0 && lastBookIndex < recentCountInt)
-          ? recentCountInt + lastBookIndex
-          : static_cast<int>(selectorIndex);
+  // (carouselDisplayIndex / recentCountInt / inMenuForCarousel computed at
+  // top of render() so the cover-buffer-staleness check can run before
+  // restoreCoverBuffer.)
   // Stats for the book currently centered in the carousel — Flow theme uses
   // this to render an "Xh Ym" indicator under the cover. Resolve the centered
   // index the same way carouselDisplayIndex does, then index the per-book
@@ -568,11 +845,6 @@ void HomeActivity::render(RenderLock&&) {
       (centeredBookIdx >= 0 && centeredBookIdx < static_cast<int>(recentBookProgress.size()))
           ? recentBookProgress[centeredBookIdx]
           : -1.0f;
-  GUI.drawRecentBookCover(renderer, Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight},
-                          recentBooks, carouselDisplayIndex, coverRendered, coverBufferStored, bufferRestored,
-                          std::bind(&HomeActivity::storeCoverBuffer, this), centeredBookStats,
-                          centeredBookProgress);
-
   // Horizontal icon strip — 6 fixed items, drawn just above the button hints.
   // Selected icon gets a light-gray rounded cell. Cycle order matches the
   // dispatch in loop() — keep them in sync. The bookmark item has a null
@@ -583,12 +855,169 @@ void HomeActivity::render(RenderLock&&) {
     bool isBookmark;
     const char* label;
   };
+  // Slot 4 swaps Bookmarks → OPDS Servers when the user has any OPDS server
+  // configured. Default stays at Bookmarks so devices with no servers keep
+  // the original 6-item menu. Couldn't verify against upstream v1.2.11.1
+  // CrossInk lyra carousel, so the swap is unconditional on hasOpdsServers
+  // — flag if you want a different rule (e.g., only swap when there are also
+  // no bookmarks saved).
+  const HomeMenuItem slot4 = hasOpdsServers
+                                 ? HomeMenuItem{LibraryIcon, false, tr(STR_OPDS_SERVERS)}
+                                 : HomeMenuItem{nullptr, true, tr(STR_BOOKMARKS)};
   const HomeMenuItem kHomeMenuItems[6] = {
       {RecentIcon, false, tr(STR_MENU_RECENT_BOOKS)}, {ChartIcon, false, tr(STR_READING_STATS)},
       {TransferIcon, false, tr(STR_FILE_TRANSFER)},   {FolderIcon, false, tr(STR_BROWSE_FILES)},
-      {nullptr, true, tr(STR_BOOKMARKS)},             {Settings2Icon, false, tr(STR_SETTINGS_TITLE)},
+      slot4,                                          {Settings2Icon, false, tr(STR_SETTINGS_TITLE)},
   };
   constexpr int kHomeMenuCount = 6;
+
+  GUI.drawRecentBookCover(renderer, Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight},
+                          recentBooks, carouselDisplayIndex, coverRendered, coverBufferStored, bufferRestored,
+                          std::bind(&HomeActivity::storeCoverBuffer, this), centeredBookStats,
+                          centeredBookProgress);
+
+  const int menuSelectedIndex =
+      (selectorIndex >= recentBooks.size()) ? static_cast<int>(selectorIndex - recentBooks.size()) : -1;
+
+  if (isMinimalTheme()) {
+    // Upstream Minimal home: 4 front-button-mapped hint slots at the bottom
+    // (MENU/BROWSE/SETTINGS/READ); pressing MENU opens an overlay with the
+    // full Minimal menu items list.
+    if (minimalMenuOpen) {
+      const auto frameHasReadingStats = hasReadingStats || hasAnyGlobalStats(globalStats);
+      const auto menuItems = buildMinimalMenuItems(hasOpdsServers, frameHasReadingStats, hasBookmarks);
+      GUI.drawButtonMenu(
+          renderer, Rect{0, metrics.homeTopPadding, pageWidth, pageHeight - metrics.homeTopPadding},
+          static_cast<int>(menuItems.size()), minimalMenuIndex,
+          [&menuItems](int index) -> std::string { return menuItems[index].label; },
+          [&menuItems](int index) -> UIIcon { return menuItems[index].icon; });
+      const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+      GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+      renderer.displayBuffer();
+      return;
+    }
+
+    // Highlight whichever front-button slot the user navigated to last.
+    const int homeNavCount = minimalHomeNavCount(!recentBooks.empty());
+    if (minimalHomeNavIndex >= homeNavCount) {
+      minimalHomeNavIndex = homeNavCount - 1;
+    }
+    MinimalTheme::setHomeButtonHintSelection(minimalHomeNavIndex);
+    GUI.drawButtonHints(renderer, tr(STR_MENU), tr(STR_BROWSE), tr(STR_SETTINGS_TITLE),
+                        recentBooks.empty() ? "" : tr(STR_READ));
+    renderer.displayBuffer();
+    if (!firstRenderDone) {
+      firstRenderDone = true;
+      requestUpdate();
+    } else if (!recentsLoaded && !recentsLoading) {
+      recentsLoading = true;
+      loadRecentCovers(metrics.homeCoverHeight);
+    }
+    return;
+  }
+
+  if (!isFlowTheme()) {
+    // Non-Flow themes defer the home menu to the theme's own drawButtonMenu
+    // implementation (vertical tiles for Lyra, etc.) and use the dynamic
+    // upstream item list. Skip the Flow-only horizontal strip + label/subtitle
+    // overlay below.
+    const auto frameHasReadingStats = hasReadingStats || hasAnyGlobalStats(globalStats);
+    const auto items = buildHomeMenuItems(hasOpdsServers, frameHasReadingStats, hasBookmarks);
+    const int menuTopY = metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing;
+    const int menuHeight =
+        pageHeight -
+        (metrics.headerHeight + metrics.homeTopPadding + metrics.verticalSpacing * 2 + metrics.buttonHintsHeight);
+    GUI.drawButtonMenu(
+        renderer, Rect{0, menuTopY, pageWidth, menuHeight}, static_cast<int>(items.size()),
+        menuSelectedIndex,
+        [&items](int index) -> std::string { return items[index].label; },
+        [&items](int index) -> UIIcon { return items[index].icon; });
+    const auto labels = mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+    renderer.displayBuffer();
+    if (!firstRenderDone) {
+      firstRenderDone = true;
+      requestUpdate();
+    } else if (!recentsLoaded && !recentsLoading) {
+      recentsLoading = true;
+      loadRecentCovers(metrics.homeCoverHeight);
+    }
+    return;
+  }
+
+  // When the user is on a menu icon (not in the carousel), overlay a menu
+  // label + dynamic subtitle in the same title/author band the theme uses for
+  // the centered book — keeps the chrome symmetric whether the cursor is on a
+  // book or a menu item. The title-area top derives from the same constants
+  // LyraFlowTheme uses (kCoverTopOffset=48, centerCoverHeight=392, 8 px
+  // cover→bar gap, 3 px bar, 6 px bar→time gap); the bottom is the rect
+  // bottom, which is laid out to align with the icon strip top. Subtitles
+  // are Option D — live counts / state for each menu item. These constants
+  // MUST stay in sync with LyraFlowTheme's progressBarTopY / timeReadY math
+  // so the menu-mode wipe lands exactly on the carousel-mode title area.
+  if (menuSelectedIndex >= 0 && menuSelectedIndex < kHomeMenuCount) {
+    const int rectTop = metrics.homeTopPadding;
+    const int rectBottom = rectTop + metrics.homeCoverTileHeight;
+    constexpr int kCoverTopOffset = 48;
+    constexpr int kCenterCoverHeight = 392;
+    const int progressBarTopY = rectTop + kCoverTopOffset + kCenterCoverHeight + 8;
+    constexpr int kProgressBarVisualHeight = 3;
+    const int timeReadY = progressBarTopY + kProgressBarVisualHeight + 6;
+    const int smallLh = renderer.getLineHeight(SMALL_FONT_ID);
+    const int textAreaTop = timeReadY + smallLh + 1;
+    const int textAreaHeight = std::max(0, rectBottom - textAreaTop);
+    const int titleLh = renderer.getLineHeight(UI_12_FONT_ID);
+    const int subtitleLh = renderer.getLineHeight(UI_10_FONT_ID);
+    const int titleBlockHeight = titleLh + 1 + subtitleLh;
+    const int labelY = textAreaTop + std::max(0, (textAreaHeight - titleBlockHeight) / 2);
+    const int subtitleY = labelY + titleLh + 1;
+
+    // Wipe the entire title area first so the book title/author the theme
+    // drew is replaced cleanly. Anything outside this band stays untouched.
+    renderer.fillRect(0, textAreaTop, pageWidth, std::max(0, rectBottom - textAreaTop), false);
+
+    char subBuf[24];
+    const char* subtitle = "";
+    switch (menuSelectedIndex) {
+      case 0:
+        snprintf(subBuf, sizeof(subBuf), "%u books", static_cast<unsigned>(recentBooks.size()));
+        subtitle = subBuf;
+        break;
+      case 1: {
+        const uint32_t hours = globalStats.totalReadingSeconds / 3600;
+        snprintf(subBuf, sizeof(subBuf), "%uh read", static_cast<unsigned>(hours));
+        subtitle = subBuf;
+        break;
+      }
+      case 2:
+        subtitle = "Wireless";
+        break;
+      case 3:
+        subtitle = "Library";
+        break;
+      case 4:
+        // Subtitle tracks whichever slot-4 mode is active (see kHomeMenuItems).
+        subtitle = hasOpdsServers ? "Servers" : (hasBookmarks ? "Saved" : "None");
+        break;
+      case 5:
+        subtitle = "v" CROSSPOINT_VERSION;
+        break;
+    }
+
+    const char* label = kHomeMenuItems[menuSelectedIndex].label;
+    const std::string truncLabel =
+        renderer.truncatedText(UI_12_FONT_ID, label, pageWidth - 40, EpdFontFamily::BOLD);
+    const int labelW = renderer.getTextWidth(UI_12_FONT_ID, truncLabel.c_str(), EpdFontFamily::BOLD);
+    renderer.drawText(UI_12_FONT_ID, (pageWidth - labelW) / 2, labelY, truncLabel.c_str(), true,
+                      EpdFontFamily::BOLD);
+
+    if (subtitle != nullptr && subtitle[0] != '\0') {
+      const std::string truncSub = renderer.truncatedText(UI_10_FONT_ID, subtitle, pageWidth - 40);
+      const int subW = renderer.getTextWidth(UI_10_FONT_ID, truncSub.c_str());
+      renderer.drawText(UI_10_FONT_ID, (pageWidth - subW) / 2, subtitleY, truncSub.c_str(), true);
+    }
+  }
+  // Icon strip sizing (kHomeMenuItems / kHomeMenuCount defined above).
   constexpr int kIconSrcSize = 32;   // raw bitmap dimensions (assets are 32×32)
   constexpr int iconSize = 40;       // visual size; drawIconScaled resamples 32→40
   constexpr int iconCellSize = 56;
@@ -600,9 +1029,6 @@ void HomeActivity::render(RenderLock&&) {
   const int totalIconArea = pageWidth - 2 * sideMargin;
   const int iconPitch = totalIconArea / kHomeMenuCount;
 
-  const int menuSelectedIndex =
-      (selectorIndex >= recentBooks.size()) ? static_cast<int>(selectorIndex - recentBooks.size()) : -1;
-
   for (int i = 0; i < kHomeMenuCount; ++i) {
     const int cellCenterX = sideMargin + iconPitch / 2 + i * iconPitch;
     const int cellX = cellCenterX - iconCellSize / 2;
@@ -612,25 +1038,74 @@ void HomeActivity::render(RenderLock&&) {
       renderer.fillRoundedRect(cellX, iconCellTopY, iconCellSize, iconCellSize, 6, Color::LightGray);
     }
     if (kHomeMenuItems[i].isBookmark) {
-      // 5-point bookmark ribbon (top-left → top-right → bottom-right → notch
-      // tip → bottom-left). Geometry mirrors LyraTheme's tile-row bookmark
-      // glyph, scaled to the icon cell so 6 icons share the same visual
-      // weight on the strip.
-      const int ribbonW = (iconSize * 16) / 22;
-      const int ribbonH = iconSize;
-      const int notchH = (iconSize * 6) / 22;
-      const int rIconX = iconX + (iconSize - ribbonW) / 2;
-      const int rIconY = iconY;
-      const int notchTipX = rIconX + ribbonW / 2;
-      const int polyX[5] = {rIconX, rIconX + ribbonW, rIconX + ribbonW, notchTipX, rIconX};
-      const int polyY[5] = {rIconY, rIconY, rIconY + ribbonH, rIconY + ribbonH - notchH, rIconY + ribbonH};
-      renderer.fillPolygon(polyX, polyY, 5, true);
+      // Outlined bookmark, drawn at the same 32×32 logical source resolution
+      // as the other home-strip icons and nearest-neighbor blitted up to the
+      // 40-px cell. Drawing in source space (not screen space) keeps the
+      // stroke weight matched to the line-art icons on either side — at
+      // 4 source-px the stroke ends up ~5 screen-px after the 32→40 scale.
+      // The shape extends to the full cell height (kTop=0, kBottom=31) and
+      // the notch tip sits at kNotchTipY=18 so the bottom-V is tall enough
+      // not to read as a squat triangle.
+      constexpr int kLeft = 5;
+      constexpr int kRight = 26;
+      constexpr int kTop = 2;
+      constexpr int kBottom = 28;
+      constexpr int kNotchTipX = 15;
+      constexpr int kNotchTipY = 16;       // depth = 12, ~same fraction of height as before — V stays tall
+      constexpr int kStroke = 2;
+
+      auto blitBlock = [&](int sx, int sy) {
+        if (sx < 0 || sx >= kIconSrcSize || sy < 0 || sy >= kIconSrcSize) return;
+        const int dstXStart = (sx * iconSize) / kIconSrcSize;
+        const int dstXEnd = ((sx + 1) * iconSize) / kIconSrcSize;
+        const int dstYStart = (sy * iconSize) / kIconSrcSize;
+        const int dstYEnd = ((sy + 1) * iconSize) / kIconSrcSize;
+        const int blockW = dstXEnd - dstXStart;
+        const int blockH = dstYEnd - dstYStart;
+        if (blockW > 0 && blockH > 0) {
+          renderer.fillRect(iconX + dstXStart, iconY + dstYStart, blockW, blockH, true);
+        }
+      };
+      auto fillSpan = [&](int x0, int x1, int sy) {
+        for (int sx = x0; sx <= x1; ++sx) blitBlock(sx, sy);
+      };
+
+      // Top edge — stepped 2-px inset on the outermost row, 1-px inset on the
+      // next row, so the top-left/right corners read as a 3-step diagonal
+      // staircase (after 32→40 scale that's a clearly visible round, not
+      // the previous 1-px-clip subtle round).
+      for (int sy = kTop; sy < kTop + kStroke; ++sy) {
+        int inset = 0;
+        if (sy == kTop) inset = 2;
+        else if (sy == kTop + 1) inset = 1;
+        fillSpan(kLeft + inset, kRight - inset, sy);
+      }
+      // Left and right verticals — same inset at the top two rows so they
+      // don't refill the pixels we just clipped on the corner staircase.
+      for (int sy = kTop; sy <= kBottom; ++sy) {
+        int inset = 0;
+        if (sy == kTop) inset = 2;
+        else if (sy == kTop + 1) inset = 1;
+        fillSpan(kLeft + inset, kLeft + kStroke - 1, sy);
+        fillSpan(kRight - kStroke + 1, kRight - inset, sy);
+      }
+      // Right slant (NT → BR): 4-px x-band ending at the polygon centerline,
+      // so the band sits inside the polygon and joins the right vertical at BR.
+      for (int sy = kNotchTipY; sy <= kBottom; ++sy) {
+        const int xc = kNotchTipX + (kRight - kNotchTipX) * (sy - kNotchTipY) / (kBottom - kNotchTipY);
+        fillSpan(xc - kStroke + 1, xc, sy);
+      }
+      // Left slant (NT → BL): mirror — band starts at centerline and extends right.
+      for (int sy = kNotchTipY; sy <= kBottom; ++sy) {
+        const int xc = kNotchTipX - (kNotchTipX - kLeft) * (sy - kNotchTipY) / (kBottom - kNotchTipY);
+        fillSpan(xc, xc + kStroke - 1, sy);
+      }
     } else if (kHomeMenuItems[i].icon != nullptr) {
       drawIconScaled(renderer, kHomeMenuItems[i].icon, kIconSrcSize, iconX, iconY, iconSize);
     }
   }
 
-  const auto labels = mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels = mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_PREV), tr(STR_DIR_NEXT));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();
@@ -645,6 +1120,12 @@ void HomeActivity::render(RenderLock&&) {
 }
 
 void HomeActivity::onSelectBook(const std::string& path) { activityManager.goToReader(path); }
+
+void HomeActivity::onContinueReading() {
+  if (!recentBooks.empty()) {
+    onSelectBook(recentBooks[0].path);
+  }
+}
 
 void HomeActivity::onFileBrowserOpen() { activityManager.goToFileBrowser(); }
 
