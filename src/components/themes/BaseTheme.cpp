@@ -1,6 +1,7 @@
 #include "BaseTheme.h"
 
 #include <GfxRenderer.h>
+#include <HalGPIO.h>
 #include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <Logging.h>
@@ -22,37 +23,6 @@ constexpr int homeMenuMargin = 20;
 constexpr int homeMarginTop = 30;
 constexpr int subtitleY = 738;
 
-// Helper: draw battery icon at given position
-void drawBatteryIcon(const GfxRenderer& renderer, int x, int y, int battWidth, int rectHeight, uint16_t percentage) {
-  // Draw battery outline (shared code)
-  BaseTheme::drawBatteryOutline(renderer, x, y, battWidth, rectHeight);
-
-  const bool charging = gpio.isUsbConnected();
-
-  // The +1 is to round up, so that we always fill at least one pixel
-  const int maxFillWidth = battWidth - 5;
-  const int fillHeight = rectHeight - 4;
-  if (maxFillWidth <= 0 || fillHeight <= 0) {
-    return;
-  }
-  int filledWidth = percentage * maxFillWidth / 100 + 1;
-  if (filledWidth > maxFillWidth) {
-    filledWidth = maxFillWidth;
-  }
-
-  // When charging, ensure minimum fill so lightning bolt is fully visible
-  constexpr int minFillForBolt = 8;
-  if (charging && filledWidth < minFillForBolt) {
-    filledWidth = std::min(minFillForBolt, maxFillWidth);
-  }
-
-  renderer.fillRect(x + 2, y + 2, filledWidth, fillHeight);
-
-  // Draw lightning bolt when charging (white/inverted on black fill for visibility)
-  if (charging) {
-    BaseTheme::drawBatteryLightningBolt(renderer, x + 4, y + 2);
-  }
-}
 }  // namespace
 
 void BaseTheme::drawBatteryOutline(const GfxRenderer& renderer, int x, int y, int battWidth, int rectHeight) {
@@ -81,6 +51,33 @@ void BaseTheme::drawBatteryLightningBolt(const GfxRenderer& renderer, int boltX,
   renderer.drawLine(boltX + 1, boltY + 7, boltX + 2, boltY + 7, false);
 }
 
+void BaseTheme::fillBatteryIcon(const GfxRenderer& renderer, Rect rect, uint16_t percentage) const {
+  const bool charging = gpio.isUsbConnected();
+
+  const int maxFillWidth = rect.width - 5;
+  const int fillHeight = rect.height - 4;
+  if (maxFillWidth <= 0 || fillHeight <= 0) {
+    return;
+  }
+  // +1 to round up so we always fill at least one pixel
+  int filledWidth = percentage * maxFillWidth / 100 + 1;
+  if (filledWidth > maxFillWidth) {
+    filledWidth = maxFillWidth;
+  }
+
+  // When charging, ensure minimum fill so lightning bolt is fully visible
+  constexpr int minFillForBolt = 8;
+  if (charging && filledWidth < minFillForBolt) {
+    filledWidth = std::min(minFillForBolt, maxFillWidth);
+  }
+
+  renderer.fillRect(rect.x + 2, rect.y + 2, filledWidth, fillHeight);
+
+  if (charging) {
+    drawBatteryLightningBolt(renderer, rect.x + 4, rect.y + 2);
+  }
+}
+
 void BaseTheme::drawBatteryLeft(const GfxRenderer& renderer, Rect rect, const bool showPercentage) const {
   // Left aligned: icon on left, percentage on right (reader mode)
   const uint16_t percentage = powerManager.getBatteryPercentage();
@@ -88,11 +85,12 @@ void BaseTheme::drawBatteryLeft(const GfxRenderer& renderer, Rect rect, const bo
 
   if (showPercentage) {
     const auto percentageText = std::to_string(percentage) + "%";
-    renderer.drawText(SMALL_FONT_ID, rect.x + BaseTheme::batteryPercentSpacing + BaseMetrics::values.batteryWidth,
-                      rect.y, percentageText.c_str());
+    renderer.drawText(SMALL_FONT_ID, rect.x + batteryPercentSpacing + rect.width, rect.y, percentageText.c_str());
   }
 
-  drawBatteryIcon(renderer, rect.x, y, BaseMetrics::values.batteryWidth, rect.height, percentage);
+  const Rect iconRect{rect.x, y, rect.width, rect.height};
+  drawBatteryOutline(renderer, rect.x, y, rect.width, rect.height);
+  fillBatteryIcon(renderer, iconRect, percentage);
 }
 
 void BaseTheme::drawBatteryRight(const GfxRenderer& renderer, Rect rect, const bool showPercentage) const {
@@ -104,16 +102,52 @@ void BaseTheme::drawBatteryRight(const GfxRenderer& renderer, Rect rect, const b
   if (showPercentage) {
     const auto percentageText = std::to_string(percentage) + "%";
     const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, percentageText.c_str());
-    // Clear the area where we're going to draw the text to prevent ghosting
-    const auto textHeight = renderer.getTextHeight(SMALL_FONT_ID);
-    renderer.fillRect(rect.x - textWidth - BaseTheme::batteryPercentSpacing, rect.y, textWidth, textHeight, false);
-    // Draw text to the left of the icon
-    renderer.drawText(SMALL_FONT_ID, rect.x - textWidth - BaseTheme::batteryPercentSpacing, rect.y,
-                      percentageText.c_str());
+    renderer.drawText(SMALL_FONT_ID, rect.x - textWidth - batteryPercentSpacing, rect.y, percentageText.c_str());
   }
 
-  // Icon is already at correct position from rect.x
-  drawBatteryIcon(renderer, rect.x, y, BaseMetrics::values.batteryWidth, rect.height, percentage);
+  const Rect iconRect{rect.x, y, rect.width, rect.height};
+  drawBatteryOutline(renderer, rect.x, y, rect.width, rect.height);
+  fillBatteryIcon(renderer, iconRect, percentage);
+}
+
+void BaseTheme::drawBatteryTopBar(const GfxRenderer& renderer) {
+  // powerManager.getBatteryPercentage() is cached internally (1.5 s poll on
+  // I2C, smoothed on ADC), so calling this every render is cheap.
+  const uint16_t percentage = powerManager.getBatteryPercentage();
+  const int screenWidth = renderer.getScreenWidth();
+
+  // Inset the bar by SETTINGS.screenMargin (plus oriented viewable margins)
+  // so it lines up with the reader's body-text width — same inset the reader
+  // progress bar uses, just at the top of the screen instead of the bottom.
+  int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
+  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                   &orientedMarginLeft);
+  const int sideInsetLeft = orientedMarginLeft + SETTINGS.screenMargin;
+  const int sideInsetRight = orientedMarginRight + SETTINGS.screenMargin;
+  const int barMaxWidth = std::max(0, screenWidth - sideInsetLeft - sideInsetRight);
+  const int fillWidth = (barMaxWidth * std::min<uint16_t>(percentage, 100)) / 100;
+
+  // Mirror the reader progress bar's bottom padding: that bar sits at y =
+  // screenHeight - 15 (3 px tall, so its bottom pixel is at screenHeight - 13,
+  // leaving 12 px of empty space below it). Place this top bar 12 px below the
+  // screen top so the gaps to the nearest screen edge match on both sides.
+  // X4 nudges the bar an extra 6 px down — the X4 panel has a slightly larger
+  // top bezel and a bigger top gap reads more balanced there. X3 keeps 12 px.
+  const int barTopY = gpio.deviceIsX4() ? 18 : 12;
+  const int stripBottom = barTopY + batteryTopBarHeight;
+  // Clear the full top strip (including the inset gutters and the new offset)
+  // so percentage drops and orientation/inset changes don't leave ghost pixels.
+  renderer.fillRect(0, 0, screenWidth, stripBottom, false);
+  if (barMaxWidth <= 0) return;
+  // Track: 1-px line at barTopY spanning the full inset width.
+  renderer.fillRect(sideInsetLeft, barTopY, barMaxWidth, 1, true);
+  // Fill: 3 px starting at barTopY, covering the battery percentage portion.
+  // Drawn after the track so it overwrites the track in the filled region;
+  // the visual reads as a thin line that thickens DOWNWARD as the battery
+  // gets fuller.
+  if (fillWidth > 0) {
+    renderer.fillRect(sideInsetLeft, barTopY, fillWidth, batteryTopBarHeight, true);
+  }
 }
 
 void BaseTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, const size_t current,
@@ -141,15 +175,16 @@ void BaseTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, const si
 }
 
 void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const char* btn2, const char* btn3,
-                                const char* btn4) const {
+                                const char* btn4, const bool allowInvertedText) const {
   const GfxRenderer::Orientation orig_orientation = renderer.getOrientation();
-  renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+  const bool invertText = allowInvertedText && orig_orientation == GfxRenderer::Orientation::PortraitInverted;
+  renderer.setOrientation(invertText ? GfxRenderer::Orientation::PortraitInverted : GfxRenderer::Orientation::Portrait);
 
   const int pageHeight = renderer.getScreenHeight();
   constexpr int buttonWidth = 106;
   constexpr int buttonHeight = BaseMetrics::values.buttonHintsHeight;
-  constexpr int buttonY = BaseMetrics::values.buttonHintsHeight;  // Distance from bottom
-  constexpr int textYOffset = 7;                                  // Distance from top of button to text baseline
+  const int buttonY = invertText ? pageHeight : BaseMetrics::values.buttonHintsHeight;
+  constexpr int textYOffset = 7;  // Distance from top of button to text baseline
   // X3 has wider screen in portrait (528 vs 480), use more spacing
   constexpr int x4ButtonPositions[] = {25, 130, 245, 350};
   constexpr int x3ButtonPositions[] = {38, 154, 268, 384};
@@ -159,7 +194,7 @@ void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   for (int i = 0; i < 4; i++) {
     // Only draw if the label is non-empty
     if (labels[i] != nullptr && labels[i][0] != '\0') {
-      const int x = buttonPositions[i];
+      const int x = buttonPositions[invertText ? 3 - i : i];
       renderer.fillRect(x, pageHeight - buttonY, buttonWidth, buttonHeight, false);
       renderer.drawRect(x, pageHeight - buttonY, buttonWidth, buttonHeight);
       const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, labels[i]);
@@ -241,11 +276,12 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
                          const std::function<std::string(int index)>& rowSubtitle,
                          const std::function<UIIcon(int index)>& rowIcon,
                          const std::function<std::string(int index)>& rowValue, bool highlightValue,
+                         const std::function<bool(int index)>& rowDimmed,
                          const std::function<bool(int index)>& isHeader) const {
   int rowHeight =
       (rowSubtitle != nullptr) ? BaseMetrics::values.listWithSubtitleRowHeight : BaseMetrics::values.listRowHeight;
   int pageItems = rect.height / rowHeight;
-  constexpr int sectionHeaderTopPadding = 20;
+  constexpr int sectionHeaderTopPadding = 15;
 
   const int totalPages = (itemCount + pageItems - 1) / pageItems;
   if (totalPages > 1) {
@@ -275,6 +311,13 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
 
   // Draw selection (skip header rows)
   int contentWidth = rect.width - 5;
+  if (selectedIndex >= 0) {
+    renderer.fillRect(0, rect.y + selectedIndex % pageItems * rowHeight - 2, rect.width, rowHeight);
+  }
+  constexpr int maxValueWidth = 200;
+  constexpr int minValueGap = 10;
+
+  // Draw all items
   const auto pageStartIndex = selectedIndex / pageItems * pageItems;
   const int rectBottom = rect.y + rect.height;
   if (selectedIndex >= 0 && !(isHeader && isHeader(selectedIndex))) {
@@ -288,75 +331,76 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
     }
   }
 
-  // Draw all items using a running Y to accommodate variable-height section headers
-  int currentY = rect.y;
+  // Draw all visible page items
   for (int i = pageStartIndex; i < itemCount && i < pageStartIndex + pageItems; i++) {
-    const bool headerRow = isHeader && isHeader(i);
-    const int rowPadding = (i > pageStartIndex && headerRow) ? sectionHeaderTopPadding : 0;
-    if (currentY + rowPadding + rowHeight > rectBottom) {
-      break;
-    }
-    currentY += rowPadding;
-    const int itemY = currentY;
-    currentY += rowHeight;
+    const int itemY = rect.y + (i % pageItems) * rowHeight;
 
-    if (headerRow) {
-      // Section header: bold uppercase label + divider line below
-      std::string label = rowTitle(i);
-      std::transform(label.begin(), label.end(), label.begin(),
-                     [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-      auto truncated = renderer.truncatedText(
-          UI_10_FONT_ID, label.c_str(), contentWidth - BaseMetrics::values.contentSidePadding * 2, EpdFontFamily::BOLD);
-      renderer.drawText(UI_10_FONT_ID, rect.x + BaseMetrics::values.contentSidePadding, itemY + 5, truncated.c_str(),
-                        true, EpdFontFamily::BOLD);
-      renderer.drawLine(rect.x, itemY + rowHeight - 1, rect.x + contentWidth, itemY + rowHeight - 1, true);
+    int rowTextWidth = contentWidth - BaseMetrics::values.contentSidePadding * 2;
+    std::string valueText;
+    if (rowValue != nullptr) {
+      valueText = rowValue(i);
+      if (!valueText.empty()) {
+        int maxValW = std::max(0, rowTextWidth - 40 - minValueGap);
+        valueText = renderer.truncatedText(UI_10_FONT_ID, valueText.c_str(), maxValW);
+        int valueWidth = renderer.getTextWidth(UI_10_FONT_ID, valueText.c_str()) + minValueGap;
+        rowTextWidth -= valueWidth;
+      }
+    }
+
+    auto itemName = rowTitle(i);
+    auto font = UI_10_FONT_ID;
+    auto item = renderer.truncatedText(font, itemName.c_str(), rowTextWidth);
+    if (isHeader && isHeader(i)) {
+      renderer.drawText(font, rect.x + BaseMetrics::values.contentSidePadding, itemY, item.c_str(), true,
+                        EpdFontFamily::BOLD);
       continue;
     }
-
-    int textWidth = contentWidth - BaseMetrics::values.contentSidePadding * 2 - (rowValue != nullptr ? 60 : 0);
-
-    // Draw name
-    auto itemName = rowTitle(i);
-    auto font = (rowSubtitle != nullptr) ? UI_12_FONT_ID : UI_10_FONT_ID;
-    auto item = renderer.truncatedText(font, itemName.c_str(), textWidth);
     renderer.drawText(font, rect.x + BaseMetrics::values.contentSidePadding, itemY, item.c_str(), i != selectedIndex);
 
-    if (rowSubtitle != nullptr) {
-      // Draw subtitle
-      std::string subtitleText = rowSubtitle(i);
-      auto subtitle = renderer.truncatedText(UI_10_FONT_ID, subtitleText.c_str(), textWidth);
-      renderer.drawText(UI_10_FONT_ID, rect.x + BaseMetrics::values.contentSidePadding, itemY + 30, subtitle.c_str(),
-                        i != selectedIndex);
+    // Apply checkerboard dither to create gray text effect for dimmed items
+    if (rowDimmed && rowDimmed(i) && i != selectedIndex) {
+      const int titleWidth = renderer.getTextWidth(font, item.c_str());
+      const int lineH = renderer.getLineHeight(font);
+      const int tx = rect.x + BaseMetrics::values.contentSidePadding;
+      for (int py = itemY; py < itemY + lineH; py++)
+        for (int px = tx; px < tx + titleWidth; px++)
+          if ((px + py) % 2 == 0) renderer.drawPixel(px, py, false);
     }
 
-    if (rowValue != nullptr) {
-      // Draw value
-      std::string valueText = rowValue(i);
+    if (rowSubtitle != nullptr) {
+      std::string subtitleText = rowSubtitle(i);
+      if (!subtitleText.empty()) {
+        auto subtitle = renderer.truncatedText(SMALL_FONT_ID, subtitleText.c_str(), rowTextWidth);
+        renderer.drawText(SMALL_FONT_ID, rect.x + BaseMetrics::values.contentSidePadding, itemY + 22, subtitle.c_str(),
+                          i != selectedIndex);
+      }
+    }
+
+    if (!valueText.empty()) {
       const auto valueTextWidth = renderer.getTextWidth(UI_10_FONT_ID, valueText.c_str());
+      int valueY = itemY;
+      if (rowSubtitle != nullptr) {
+        valueY = itemY + 10;
+      }
       renderer.drawText(UI_10_FONT_ID, rect.x + contentWidth - BaseMetrics::values.contentSidePadding - valueTextWidth,
-                        itemY, valueText.c_str(), i != selectedIndex);
+                        valueY, valueText.c_str(), i != selectedIndex);
     }
   }
 }
 
 void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* title, const char* subtitle) const {
-  // Hide last battery draw
-  constexpr int maxBatteryWidth = 80;
-  renderer.fillRect(rect.x + rect.width - maxBatteryWidth, rect.y + 5, maxBatteryWidth,
-                    BaseMetrics::values.batteryHeight + 10, false);
-
-  const bool showBatteryPercentage =
-      SETTINGS.hideBatteryPercentage != CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_ALWAYS;
-  // Position icon at right edge, drawBatteryRight will place text to the left
-  const int batteryX = rect.x + rect.width - 12 - BaseMetrics::values.batteryWidth;
-  drawBatteryRight(renderer,
-                   Rect{batteryX, rect.y + 5, BaseMetrics::values.batteryWidth, BaseMetrics::values.batteryHeight},
-                   showBatteryPercentage);
+  // Battery is now drawn as a thin bar at the very top of the screen instead
+  // of a corner icon, so the title is free to use the full header width.
+  // Honor the user's "Show battery" toggle so disabling it actually hides
+  // the indicator on every menu/header page (previously the reader status
+  // bar was the only surface that respected this setting).
+  if (SETTINGS.statusBarBattery) {
+    drawBatteryTopBar(renderer);
+  }
 
   if (title) {
-    int padding = rect.width - batteryX + BaseMetrics::values.batteryWidth;
     auto truncatedTitle = renderer.truncatedText(UI_12_FONT_ID, title,
-                                                 rect.width - padding * 2 - BaseMetrics::values.contentSidePadding * 2,
+                                                 rect.width - BaseMetrics::values.contentSidePadding * 2,
                                                  EpdFontFamily::BOLD);
     renderer.drawCenteredText(UI_12_FONT_ID, rect.y + 5, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
   }
@@ -425,8 +469,8 @@ void BaseTheme::drawTabBar(const GfxRenderer& renderer, const Rect rect, const s
 // Draw the "Recent Book" cover card on the home screen
 // TODO: Refactor method to make it cleaner, split into smaller methods
 void BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
-                                    const int selectorIndex, bool& coverRendered, bool& coverBufferStored,
-                                    bool& bufferRestored, std::function<bool()> storeCoverBuffer,
+                                    int selectorIndex, bool& coverRendered, bool& coverBufferStored,
+                                    bool& bufferRestored, const std::function<bool()>& storeCoverBuffer,
                                     const BookReadingStats* /*stats*/, float /*progressPercent*/) const {
   const bool hasContinueReading = !recentBooks.empty();
   const bool bookSelected = hasContinueReading && selectorIndex == 0;
@@ -693,6 +737,12 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   auto textY = screenHeight - UITheme::getInstance().getStatusBarHeight() - orientedMarginBottom - paddingBottom - 4;
   int progressTextWidth = 0;
 
+  // Status-bar elements (percent text, progress bar, title) all inset from
+  // the screen edges by the same amount as the reader's body text. That ties
+  // them to the user's screenMargin setting so they line up with the page.
+  const int sideInsetLeft = orientedMarginLeft + SETTINGS.screenMargin;
+  const int sideInsetRight = orientedMarginRight + SETTINGS.screenMargin;
+
   if (SETTINGS.statusBarBookProgressPercentage || SETTINGS.statusBarChapterPageCount) {
     // Right aligned text for progress counter
     char progressStr[32];
@@ -706,27 +756,32 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
     }
 
     progressTextWidth = renderer.getTextWidth(SMALL_FONT_ID, progressStr);
-    renderer.drawText(
-        SMALL_FONT_ID,
-        renderer.getScreenWidth() - metrics.statusBarHorizontalMargin - orientedMarginRight - progressTextWidth, textY,
-        progressStr);
+    renderer.drawText(SMALL_FONT_ID, renderer.getScreenWidth() - sideInsetRight - progressTextWidth, textY,
+                      progressStr);
   }
 
-  // Draw Progress Bar
+  // Draw Progress Bar — reference (Lua-fork) style: a 1-px track spanning the
+  // viewport sits 2 px below a 3-px fill that covers the progress portion, so
+  // the visual reads as a thin line that thickens to mark how far you've read.
+  // The bar floats 15 px above the screen bottom and is inset by the body
+  // text margin (screenMargin) on each side. The user-configured thickness
+  // setting is intentionally ignored here.
   if (SETTINGS.statusBarProgressBar != CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS) {
-    const int progressBarMaxWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
-    const int progressBarY = renderer.getScreenHeight() - orientedMarginBottom -
-                             ((SETTINGS.statusBarProgressBarThickness + 1) * 2) - paddingBottom;
+    const int progressBarMaxWidth = std::max(0, renderer.getScreenWidth() - sideInsetLeft - sideInsetRight);
+    const int progressBarY = renderer.getScreenHeight() - 15 - paddingBottom;
     size_t progress;
     if (SETTINGS.statusBarProgressBar == CrossPointSettings::STATUS_BAR_PROGRESS_BAR::BOOK_PROGRESS) {
       progress = static_cast<size_t>(bookProgress);
     } else {
-      // Chapter progress
       progress = (pageCount > 0) ? (static_cast<float>(currentPage) / pageCount) * 100 : 0;
     }
     const int barWidth = progressBarMaxWidth * progress / 100;
-    renderer.fillRect(orientedMarginLeft, progressBarY, barWidth, ((SETTINGS.statusBarProgressBarThickness + 1) * 2),
-                      true);
+    // Track sits 2 px lower than the fill so the unread portion reads as a
+    // thinner line below the thicker fill.
+    renderer.fillRect(sideInsetLeft, progressBarY + 2, progressBarMaxWidth, 1, true);
+    if (barWidth > 0) {
+      renderer.fillRect(sideInsetLeft, progressBarY, barWidth, 3, true);
+    }
   }
 
   // Bookmark icon: drawn at the far left of the status bar when the current page is bookmarked.
@@ -748,49 +803,30 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
     renderer.fillPolygon(xNotch, yNotch, 3, false);
   }
 
-  // Draw Battery
-  const bool showBatteryPercentage =
-      SETTINGS.hideBatteryPercentage == CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_NEVER;
+  // Battery is rendered as a thin bar at the very top of the screen now;
+  // honor the user setting that toggles whether the indicator appears at all.
   if (SETTINGS.statusBarBattery) {
-    GUI.drawBatteryLeft(renderer,
-                        Rect{metrics.statusBarHorizontalMargin + orientedMarginLeft + 1 + bmTotalWidth, textY,
-                             metrics.batteryWidth, metrics.batteryHeight},
-                        showBatteryPercentage);
+    drawBatteryTopBar(renderer);
   }
 
-  // Draw Title
+  // Draw Title — left-aligned at the same screenMargin inset the progress bar
+  // and percent text use, so all three line up with the body-text width.
   if (!title.empty()) {
     textY -= textYOffset;
-    // Centered chapter title text
-    // Page width minus existing content with 30px padding on each side
-    const int rendererableScreenWidth =
-        renderer.getScreenWidth() - (metrics.statusBarHorizontalMargin * 2) - orientedMarginLeft - orientedMarginRight;
+    // If the bookmark icon is showing, push past it (it lives to the left of
+    // the title at metrics.statusBarHorizontalMargin + 1 + bmIconW px).
+    const int bookmarkRightEdge =
+        isPageBookmarked ? (metrics.statusBarHorizontalMargin + orientedMarginLeft + 1 + bmIconW + bmIconGap) : 0;
+    const int titleLeftX = std::max(sideInsetLeft, bookmarkRightEdge);
 
-    const int batterySize = SETTINGS.statusBarBattery ? (showBatteryPercentage ? 50 : 20) : 0;
-    const int titleMarginLeft = batterySize + bmTotalWidth + 30;
-    const int titleMarginRight = progressTextWidth + 30;
-
-    // Attempt to center title on the screen, but if title is too wide then later we will center it within the
-    // available space.
-    int titleMarginLeftAdjusted = std::max(titleMarginLeft, titleMarginRight);
-    int availableTitleSpace = rendererableScreenWidth - 2 * titleMarginLeftAdjusted;
-
-    int titleWidth;
-    titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
-    if (titleWidth > availableTitleSpace) {
-      // Not enough space to center on the screen, center it within the remaining space instead
-      availableTitleSpace = rendererableScreenWidth - titleMarginLeft - titleMarginRight;
-      titleMarginLeftAdjusted = titleMarginLeft;
+    // Reserve space for the right-aligned percent text (with an 8 px gap).
+    const int titleRightLimit =
+        renderer.getScreenWidth() - sideInsetRight - (progressTextWidth > 0 ? progressTextWidth + 8 : 0);
+    const int titleMaxWidth = std::max(0, titleRightLimit - titleLeftX);
+    if (titleMaxWidth > 0) {
+      title = renderer.truncatedText(SMALL_FONT_ID, title.c_str(), titleMaxWidth);
+      renderer.drawText(SMALL_FONT_ID, titleLeftX, textY, title.c_str());
     }
-    if (titleWidth > availableTitleSpace) {
-      title = renderer.truncatedText(SMALL_FONT_ID, title.c_str(), availableTitleSpace);
-      titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
-    }
-
-    renderer.drawText(SMALL_FONT_ID,
-                      titleMarginLeftAdjusted + metrics.statusBarHorizontalMargin + orientedMarginLeft +
-                          (availableTitleSpace - titleWidth) / 2,
-                      textY, title.c_str());
   }
 }
 

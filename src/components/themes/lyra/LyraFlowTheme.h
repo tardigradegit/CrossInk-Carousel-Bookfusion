@@ -11,22 +11,26 @@ class GfxRenderer;
 namespace LyraFlowMetrics {
 constexpr ThemeMetrics values = [] {
   ThemeMetrics v = LyraMetrics::values;
-  v.homeCoverHeight = 320;       // 25-kai book ratio (~0.7) — center cover
-  v.homeCoverTileHeight = 360;   // hugs the bottom of the cover so the menu sits close
+  // X3-tuned values: cover (392 tall) + tight progress bar + title + author.
+  // The rect bottom is laid out to match the home menu icon-strip top
+  // (HomeActivity computes that at pageHeight − buttonHintsHeight − 16 −
+  // iconCellSize = 792 − 40 − 16 − 56 = 680; with topPadding = 41 the rect
+  // height that aligns to it is 680 − 41 = 639). Centering title/author
+  // inside the rect therefore equals centering them between the time row
+  // and the menu icon-strip top.
+  v.homeCoverHeight = 392;
+  v.homeCoverTileHeight = 639;
   v.homeRecentBooksCount = 5;    // matches the 5 carousel slots visible at once
                                  // (center + 2 sides each direction). Capped at 5 to
                                  // avoid first-boot OOM during sequential thumb gen on
                                  // ESP32-C3 — see HomeActivity::loadRecentCovers.
-  v.homeTopPadding = 41;         // tighter than Lyra's 56: Flow's home header has no
-                                 // title/subtitle, only the battery icon (rendered at
-                                 // y+5 inside the rect), so the rest of the rect was
-                                 // dead space. Shrinking it shifts the carousel title
-                                 // and covers up ~15 px closer to the battery row.
-  v.homeMenuTopOffset = 28;      // 41 + 360 + 28 = 429, ~3 px above where the
-                                 // menu sat at Lyra's original 56 padding. The 28 px
-                                 // gap between cover bottom and menu top houses the
-                                 // per-book reading-time indicator drawn under the
-                                 // center cover.
+  v.homeTopPadding = 41;         // header height unchanged from X4 — battery icon at
+                                 // y+5 doesn't need more vertical room on the wider
+                                 // panel, and keeping the header tight preserves
+                                 // menu space below the (taller) carousel.
+  v.homeMenuTopOffset = 16;      // No more time-read line under the cover, so
+                                 // this gap collapses to a standard 16 px
+                                 // (matches metrics.verticalSpacing).
   return v;
 }();
 }  // namespace LyraFlowMetrics
@@ -34,8 +38,8 @@ constexpr ThemeMetrics values = [] {
 class LyraFlowTheme : public LyraTheme {
  public:
   void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
-                           const int selectorIndex, bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,
-                           std::function<bool()> storeCoverBuffer, const BookReadingStats* stats = nullptr,
+                           int selectorIndex, bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,
+                           const std::function<bool()>& storeCoverBuffer, const BookReadingStats* stats = nullptr,
                            float progressPercent = -1.0f) const override;
   // Flow-only override of the home menu. Two-anchor pagination with a
   // sticky bit so the second page stays in view as the cursor scrolls
@@ -51,4 +55,13 @@ class LyraFlowTheme : public LyraTheme {
   // a UX hint; resets itself whenever the cursor lands unambiguously
   // inside page 1's exclusive zone.
   mutable bool stickyMenuPage2 = false;
+
+  // Cached geometry of the most recently rendered center cover. Set inside
+  // the !coverRendered branch of drawRecentBookCover; reused outside that
+  // branch to redraw the selection border per frame without re-running the
+  // SD-heavy cover load. mutable for the same reason as stickyMenuPage2.
+  mutable int cachedCenterCoverX = 0;
+  mutable int cachedCenterCoverY = 0;
+  mutable int cachedActualCoverWidth = 0;
+  mutable int cachedActualCoverHeight = 0;
 };

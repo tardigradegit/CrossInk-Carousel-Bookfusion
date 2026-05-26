@@ -11,10 +11,12 @@
 #include <algorithm>
 
 #include "MappedInputManager.h"
+#include "RecentBookProgress.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "components/icons/book.h"
 #include "fontIds.h"
+#include "util/ProgressRingUtil.h"
 
 void RecentBooksGridActivity::loadRecentBooks() {
   recentBooks.clear();
@@ -157,17 +159,85 @@ void RecentBooksGridActivity::render(RenderLock&&) {
   const auto pageHeight = renderer.getScreenHeight();
   const auto& metrics = UITheme::getInstance().getMetrics();
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_MENU_RECENT_BOOKS));
+  // Header doubles as the selected-book label. Pass "" so drawHeader still
+  // clears the rect, paints the battery top bar, and lays down the underline,
+  // but renders no title text — we draw the title (bold) and author (regular,
+  // same UI_12 size) inline below so they share a single line.
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, "");
+
+  if (selectorIndex < recentBooks.size()) {
+    const auto& sel = recentBooks[selectorIndex];
+    const int titleX = metrics.contentSidePadding;
+    // Title shifted up 1 px from the LyraTheme default (+3) — visually the
+    // text was sitting closer to the underline than to the battery bar above
+    // it. drawText interprets `y` as the top of the bbox, but ascender +
+    // descender + leading make the visible glyph center sit slightly below
+    // that, so a -1 nudge brings the optical center to the middle.
+    const int titleY = metrics.topPadding + metrics.batteryBarHeight + 2;
+
+    // Pie-style progress ring on the right edge, mirrored padding from the
+    // right of the screen so it sits opposite the title's left padding.
+    if (cachedProgressIndex != selectorIndex) {
+      cachedProgressPercent = RecentBookProgress::loadPercent(sel);
+      cachedProgressIndex = selectorIndex;
+    }
+    // Center the ring against the line (advanceY) rather than the ascender
+    // height — ascender misses the descender + leading, which would pull the
+    // ring's optical center up by ~2 px and make it sit closer to the top
+    // bar than the bottom bar. Diameter bumped by +4 (radius +2) and band
+    // thickness +2 to a 7-px band, both per the design tweak.
+    const int lineH = renderer.getLineHeight(UI_12_FONT_ID);
+    const int discRadius = std::max(6, (lineH - 2) / 2 + 1);
+    constexpr int kDiscGap = 6;  // breathing room between text and disc
+    const int discRightEdge = pageWidth - metrics.contentSidePadding;
+    const int discCx = discRightEdge - discRadius;
+    const int discCy = titleY + lineH / 2;
+    ProgressRingUtil::drawProgressRing(renderer, discCx, discCy, discRadius, cachedProgressPercent);
+
+    // Keep the title/author starting at contentSidePadding (unchanged). Just
+    // pull the text-width budget in by the disc footprint so long titles can't
+    // truncate into the disc.
+    const int budget = (pageWidth - metrics.contentSidePadding * 2) - (2 * discRadius + kDiscGap);
+    constexpr int gap = 12;  // separation between title and author
+
+    const int authorRawW = sel.author.empty()
+                               ? 0
+                               : renderer.getTextWidth(UI_12_FONT_ID, sel.author.c_str(), EpdFontFamily::REGULAR);
+    const int authorReserved = sel.author.empty() ? 0 : (gap + authorRawW);
+    const int titleMaxW = std::max(0, budget - authorReserved);
+
+    const std::string truncTitle =
+        renderer.truncatedText(UI_12_FONT_ID, sel.title.c_str(), titleMaxW, EpdFontFamily::BOLD);
+    const int truncTitleW = renderer.getTextWidth(UI_12_FONT_ID, truncTitle.c_str(), EpdFontFamily::BOLD);
+    renderer.drawText(UI_12_FONT_ID, titleX, titleY, truncTitle.c_str(), true, EpdFontFamily::BOLD);
+
+    if (!sel.author.empty()) {
+      const int authorMaxW = std::max(0, budget - truncTitleW - gap);
+      // Bail out of drawing the author if there's no usable space — better
+      // than crowding a single-letter ellipsis next to the title.
+      if (authorMaxW > 20) {
+        const std::string truncAuthor =
+            renderer.truncatedText(UI_12_FONT_ID, sel.author.c_str(), authorMaxW, EpdFontFamily::REGULAR);
+        renderer.drawText(UI_12_FONT_ID, titleX + truncTitleW + gap, titleY, truncAuthor.c_str(), true);
+      }
+    }
+  } else {
+    // Fallback: empty list — render the screen heading we'd otherwise replace.
+    const int titleX = metrics.contentSidePadding;
+    const int titleY = metrics.topPadding + metrics.batteryBarHeight + 3;
+    renderer.drawText(UI_12_FONT_ID, titleX, titleY, tr(STR_MENU_RECENT_BOOKS), true, EpdFontFamily::BOLD);
+  }
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  constexpr int titleStripHeight = 32;
-  constexpr int titleGridGap = 16;  // breathing room between title strip and the top row of covers
   constexpr int columns = 3;
-  // Vertical row gap is a bit more than the horizontal one — equal pixel
-  // values read as visually tighter vertically because covers are taller
-  // than they are wide.
-  const int rowSpacing = metrics.verticalSpacing + 4;
-  const int totalGridWidth = columns * COVER_WIDTH + (columns - 1) * metrics.verticalSpacing;
+  // 14 px gap reused for column AND row spacing — sized in tandem with the
+  // 136×204 COVER_WIDTH/COVER_HEIGHT so the total grid width stays at
+  // 3·136 + 2·14 = 436 (identical to the previous 140-wide + 8-gap layout).
+  // Covers come out a touch smaller; the extra 6 px goes to breathing room
+  // between them.
+  constexpr int gridSpacing = 14;
+  const int rowSpacing = gridSpacing;
+  const int totalGridWidth = columns * COVER_WIDTH + (columns - 1) * gridSpacing;
   const int startXOffset = (pageWidth - totalGridWidth) / 2;
 
   const int totalBooks = static_cast<int>(recentBooks.size());
@@ -179,18 +249,6 @@ void RecentBooksGridActivity::render(RenderLock&&) {
   if (recentBooks.empty()) {
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, contentTop + 20, tr(STR_NO_RECENT_BOOKS));
   } else {
-    // Selected-book title strip: 32 px tall, sits between the screen
-    // heading and the grid. Aligned to the grid's left edge (same x as
-    // the leftmost cover) and constrained to the grid's full width so its
-    // side padding mirrors the grid's. Typography only — no border.
-    if (selectorIndex < recentBooks.size()) {
-      const int titleLh = renderer.getLineHeight(UI_12_FONT_ID);
-      const int titleY = contentTop + (titleStripHeight - titleLh) / 2;
-      const std::string truncTitle = renderer.truncatedText(
-          UI_12_FONT_ID, recentBooks[selectorIndex].title.c_str(), totalGridWidth, EpdFontFamily::BOLD);
-      renderer.drawText(UI_12_FONT_ID, startXOffset, titleY, truncTitle.c_str(), true, EpdFontFamily::BOLD);
-    }
-
     // Tracks the last loaded book's actual rendered dimensions so empty
     // grid slots on the same page can match (otherwise empty boxes drawn
     // at COVER_WIDTH × COVER_HEIGHT look bigger than the aspect-fit covers).
@@ -202,8 +260,8 @@ void RecentBooksGridActivity::render(RenderLock&&) {
       const int bookIdx = pageStart + i;
       const int col = i % columns;
       const int row = i / columns;
-      const int x = startXOffset + col * (COVER_WIDTH + metrics.verticalSpacing);
-      const int y = contentTop + titleStripHeight + titleGridGap + row * (COVER_HEIGHT + rowSpacing);
+      const int x = startXOffset + col * (COVER_WIDTH + gridSpacing);
+      const int y = contentTop + row * (COVER_HEIGHT + rowSpacing);
 
       // Per-cell render bounds. Default to full cell for the placeholder
       // path; if a real cover loads we shrink these to the cover's true
@@ -262,8 +320,8 @@ void RecentBooksGridActivity::render(RenderLock&&) {
     for (int i = pageCount; i < BOOKS_PER_PAGE; ++i) {
       const int col = i % columns;
       const int row = i / columns;
-      const int px = startXOffset + col * (COVER_WIDTH + metrics.verticalSpacing) + sampleXInset;
-      const int py = contentTop + titleStripHeight + titleGridGap + row * (COVER_HEIGHT + rowSpacing) + sampleYInset;
+      const int px = startXOffset + col * (COVER_WIDTH + gridSpacing) + sampleXInset;
+      const int py = contentTop + row * (COVER_HEIGHT + rowSpacing) + sampleYInset;
       renderer.drawRect(px, py, sampleBw, sampleBh, 1, true);
     }
 

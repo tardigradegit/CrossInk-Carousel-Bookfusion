@@ -59,6 +59,12 @@ class CrossPointSettings {
     STATUS_BAR_PROGRESS_BAR_THICKNESS_COUNT
   };
   enum STATUS_BAR_TITLE { BOOK_TITLE = 0, CHAPTER_TITLE = 1, HIDE_TITLE = 2, STATUS_BAR_TITLE_COUNT };
+  enum XTC_STATUS_BAR_MODE {
+    XTC_STATUS_BAR_HIDE = 0,
+    XTC_STATUS_BAR_BOTTOM = 1,
+    XTC_STATUS_BAR_TOP = 2,
+    XTC_STATUS_BAR_MODE_COUNT
+  };
 
   enum ORIENTATION {
     PORTRAIT = 0,       // 480x800 logical coordinates (current default)
@@ -93,16 +99,25 @@ class CrossPointSettings {
   // Swapped: Next, Previous
   enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTON_LAYOUT_COUNT };
 
+  enum FRONT_BUTTON_ORIENTATION_AWARE {
+    FRONT_ORIENTATION_AWARE_OFF = 0,
+    FRONT_ORIENTATION_AWARE_NAV_BUTTONS = 1,
+    FRONT_ORIENTATION_AWARE_ALL_BUTTONS = 2,
+    FRONT_ORIENTATION_AWARE_COUNT
+  };
+
   // Side button long-press action options
   enum SIDE_LONG_PRESS {
     SIDE_LONG_CHAPTER_SKIP = 0,
     SIDE_LONG_FONT_SIZE = 1,
     SIDE_LONG_OFF = 2,
+    SIDE_LONG_ORIENTATION_CHANGE = 3,
     SIDE_LONG_PRESS_COUNT
   };
 
-  // Font family options
+  // Font family options (built-in fonts only; SD card fonts use sdFontFamilyName)
   enum FONT_FAMILY { LEXENDDECA = 0, BITTER = 1, CHAREINK = 2, FONT_FAMILY_COUNT };
+  static constexpr uint8_t BUILTIN_FONT_COUNT = FONT_FAMILY_COUNT;
   // Font size options
   enum FONT_SIZE {
     TINY = 0,
@@ -160,14 +175,37 @@ class CrossPointSettings {
     SCREENSHOT = 11,
     CYCLE_PAGE_TURN = 12,
     FILE_TRANSFER = 13,
+    TOGGLE_TILT_PAGE_TURN = 14,
     SHORT_PWRBTN_COUNT
   };
 
   // Hide battery percentage
   enum HIDE_BATTERY_PERCENTAGE { HIDE_NEVER = 0, HIDE_READER = 1, HIDE_ALWAYS = 2, HIDE_BATTERY_PERCENTAGE_COUNT };
 
-  // UI Theme
-  enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, LYRA_FLOW = 3, ROUNDEDRAFF = 4 };
+  // Page turn button long press behavior (upstream addition).
+  enum LONG_PRESS_BUTTON_BEHAVIOR {
+    OFF = 0,
+    CHAPTER_SKIP = 1,
+    ORIENTATION_CHANGE = 2,
+    LONG_PRESS_BUTTON_BEHAVIOR_COUNT
+  };
+
+  // UI Theme. Our fork keeps LYRA_FLOW (= 3) and ROUNDEDRAFF (= 4). MINIMAL
+  // (= 5) is the upstream v1.2.11 personal theme. LYRA_CAROUSEL (= 6) is
+  // preserved at the tail as a legacy enum value so upstream code referencing
+  // it still compiles, but it is not exposed in the picker unless the
+  // CROSSINK_ENABLE_LYRA_CAROUSEL build flag is set.
+  enum UI_THEME {
+    CLASSIC = 0,
+    LYRA = 1,
+    LYRA_3_COVERS = 2,
+    LYRA_FLOW = 3,
+    ROUNDEDRAFF = 4,
+    MINIMAL = 5,
+    LYRA_CAROUSEL = 6,
+    UI_THEME_COUNT = 7,
+  };
+  enum RECENT_BOOKS_VIEW { RECENT_BOOKS_LIST = 0, RECENT_BOOKS_GRID = 1, RECENT_BOOKS_VIEW_COUNT };
 
   // Image rendering in EPUB reader
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
@@ -189,6 +227,7 @@ class CrossPointSettings {
     LONG_MENU_SCREENSHOT = 10,
     LONG_MENU_CYCLE_PAGE_TURN = 11,
     LONG_MENU_FILE_TRANSFER = 12,
+    LONG_MENU_TOGGLE_TILT_PAGE_TURN = 13,
     LONG_PRESS_MENU_ACTION_COUNT
   };
 
@@ -212,6 +251,7 @@ class CrossPointSettings {
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
   uint8_t statusBarTitle = CHAPTER_TITLE;
   uint8_t statusBarBattery = 1;
+  uint8_t xtcStatusBarMode = XTC_STATUS_BAR_HIDE;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
   uint8_t forceParagraphIndents = 0;
@@ -226,6 +266,8 @@ class CrossPointSettings {
   // Button layouts (front layout retained for migration only)
   uint8_t frontButtonLayout = BACK_CONFIRM_LEFT_RIGHT;
   uint8_t sideButtonLayout = PREV_NEXT;
+  uint8_t frontButtonOrientationAware = FRONT_ORIENTATION_AWARE_OFF;
+  uint8_t sideButtonOrientationAware = 0;
   // Action performed when side buttons are long-pressed in reader
   uint8_t sideButtonLongPress = SIDE_LONG_CHAPTER_SKIP;
   // Front button remap (logical -> hardware)
@@ -246,8 +288,9 @@ class CrossPointSettings {
   uint8_t fontSize = MEDIUM;
   uint8_t lineSpacing = NORMAL;
   uint8_t paragraphAlignment = JUSTIFIED;
-  // Auto-sleep timeout setting (default 10 minutes)
-  uint8_t sleepTimeout = SLEEP_10_MIN;
+  // Auto-sleep timeout setting (default 10 minutes). Legacy `sleepTimeout`
+  // enum values are migration-only — runtime + UI now use minutes directly.
+  uint8_t sleepTimeoutMinutes = 10;
   // E-ink refresh frequency (default 15 pages)
   uint8_t refreshFrequency = REFRESH_15;
   uint8_t hyphenationEnabled = 0;
@@ -260,10 +303,12 @@ class CrossPointSettings {
   char opdsPassword[64] = "";
   // Hide battery percentage
   uint8_t hideBatteryPercentage = HIDE_NEVER;
-  // Long-press chapter skip on side buttons
-  uint8_t longPressChapterSkip = 1;
+  // Long-press page turn button behavior
+  uint8_t longPressButtonBehavior = OFF;
   // UI Theme
   uint8_t uiTheme = LYRA;
+  // Recent Books screen layout
+  uint8_t recentBooksView = RECENT_BOOKS_LIST;
   // Sunlight fading compensation
   uint8_t fadingFix = 0;
   // Use book's embedded CSS styles for EPUB rendering (1 = enabled, 0 = disabled)
@@ -272,6 +317,8 @@ class CrossPointSettings {
   uint8_t bionicReadingEnabled = 0;
   // Guide Dots - places a middle dot between words to guide the eye
   uint8_t guideReadingEnabled = 0;
+  // SD card font family name (empty = use built-in fontFamily)
+  char sdFontFamilyName[32] = "";
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
   uint8_t showHiddenFiles = 0;
   // Move epub to /Read/ folder on SD card when marked as finished (0 = disabled, 1 = enabled)
@@ -292,11 +339,21 @@ class CrossPointSettings {
 
   static constexpr uint16_t POWER_BUTTON_WAKE_SHORT_MS = 10;
   static constexpr uint16_t POWER_BUTTON_LONG_PRESS_MS = 400;
+  static constexpr uint8_t MIN_SLEEP_TIMEOUT_MINUTES = 1;
+  static constexpr uint8_t MAX_SLEEP_TIMEOUT_MINUTES = 30;
 
   uint16_t getPowerButtonWakeDuration() const {
     return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? POWER_BUTTON_WAKE_SHORT_MS
                                                                     : POWER_BUTTON_LONG_PRESS_MS;
   }
+
+  // Callback to resolve SD card font IDs. Set by SdCardFontSystem::begin().
+  // Returns font ID or 0 if not found.
+  using SdFontIdResolver = int (*)(void* ctx, const char* familyName, uint8_t fontSize);
+  SdFontIdResolver sdFontIdResolver = nullptr;
+  void* sdFontResolverCtx = nullptr;
+
+  uint16_t getPowerButtonDuration() const { return getPowerButtonWakeDuration(); }
   uint16_t getPowerButtonLongPressDuration() const { return POWER_BUTTON_LONG_PRESS_MS; }
   static uint8_t getActiveReaderFontSizeCount();
   static uint8_t getStoredReaderFontSize(FONT_SIZE size);
@@ -312,6 +369,9 @@ class CrossPointSettings {
 
   static void validateFrontButtonMapping(CrossPointSettings& settings);
   static void validateReaderFrontButtonMapping(CrossPointSettings& settings);
+  // Migrates the legacy SLEEP_*_MIN enum value to the new 1–30 minute integer
+  // schema. Anything outside the legacy set defaults to 10 minutes.
+  static uint8_t sleepTimeoutEnumToMinutes(uint8_t legacyValue);
 
  private:
   bool loadFromBinaryFile();
