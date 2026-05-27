@@ -5,6 +5,8 @@
 
 #include "ButtonRemapActivity.h"
 #include "ClearCacheActivity.h"
+#include "FontDownloadActivity.h"
+#include "FontSelectionActivity.h"
 #include "CrossPointSettings.h"
 #include "BookFusionSettingsActivity.h"
 #include "KOReaderSettingsActivity.h"
