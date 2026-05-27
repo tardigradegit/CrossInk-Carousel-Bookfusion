@@ -21,6 +21,7 @@
 #include "BookFusionBookIdStore.h"
 #include "BookFusionSyncActivity.h"
 #include "BookFusionTokenStore.h"
+#include "BookStatsActivity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "EpubReaderAutoPageTurnIntervalActivity.h"
