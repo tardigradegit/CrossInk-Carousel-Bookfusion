@@ -23,10 +23,6 @@ class FileWriteStream final : public Stream {
   size_t write(uint8_t byte) override { return write(&byte, 1); }
 
   size_t write(const uint8_t* buffer, size_t size) override {
-    if (cancelFlag_ && *cancelFlag_) {
-      writeOk_ = false;
-      return 0;
-    }
     const size_t written = file_.write(buffer, size);
     if (written != size) {
       writeOk_ = false;
@@ -165,11 +161,6 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   file.close();
   http.end();
 
-  if (cancelFlag && *cancelFlag) {
-    LOG_DBG("HTTP", "Download aborted by caller");
-    Storage.remove(destPath.c_str());
-    return ABORTED;
-  }
 
   if (writeResult < 0) {
     LOG_ERR("HTTP", "writeToStream error: %d", writeResult);
