@@ -72,7 +72,7 @@ void RecentBooksGridActivity::loadPageCovers(int pageStart) {
           }
           GUI.fillPopupProgress(renderer, popupRect, 10 + processedCount * (90 / totalToProcess));
           if (!epub.generateThumbBmp(COVER_HEIGHT)) {
-            RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
+            (void)RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
             book.coverBmpPath = "";
           }
         }
@@ -85,7 +85,7 @@ void RecentBooksGridActivity::loadPageCovers(int pageStart) {
           }
           GUI.fillPopupProgress(renderer, popupRect, 10 + processedCount * (90 / totalToProcess));
           if (!xtc.generateThumbBmp(COVER_HEIGHT)) {
-            RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
+            (void)RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
             book.coverBmpPath = "";
           }
         }
