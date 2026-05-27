@@ -191,10 +191,10 @@ void LyraTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const char
   // Underline inset by the same amount the battery top bar uses so all
   // full-screen-width horizontal lines share the same gutters.
   {
-    int oTop, oRight, oBottom, oLeft;
-    renderer.getOrientedViewableTRBL(&oTop, &oRight, &oBottom, &oLeft);
-    const int inL = oLeft + SETTINGS.screenMargin;
-    const int inR = oRight + SETTINGS.screenMargin;
+    int lTop, lRight, lBottom, lLeft;
+    renderer.getOrientedViewableTRBL(&lTop, &lRight, &lBottom, &lLeft);
+    const int inL = lLeft + SETTINGS.screenMargin;
+    const int inR = lRight + SETTINGS.screenMargin;
     const int lineY = rect.y + rect.height - 1;
     renderer.drawLine(rect.x + inL, lineY, rect.x + rect.width - inR - 1, lineY, true);
   }
