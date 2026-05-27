@@ -32,7 +32,7 @@
 #include "EpubReaderUtils.h"
 #include "GlobalActions.h"
 #include "KOReaderCredentialStore.h"
-#include "KOReaderSettingsActivity.h"
+#include "activities/settings/KOReaderSettingsActivity.h"
 #include "KOReaderSyncActivity.h"
 #include "MappedInputManager.h"
 #include "ProgressMapper.h"
