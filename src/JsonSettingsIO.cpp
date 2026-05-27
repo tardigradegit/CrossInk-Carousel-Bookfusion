@@ -436,7 +436,7 @@ bool JsonSettingsIO::loadOpds(OpdsServerStore& store, const char* json, bool* ne
 
 bool JsonSettingsIO::saveBookFusion(const BookFusionTokenStore& store, const char* path) {
   JsonDocument doc;
-  doc["token_obf"] = obfuscation::obfuscateToBase64(store.accessToken);
+  doc["token_obf"] = obfuscation::obfuscateToBase64(store.getToken());
 
   String json;
   serializeJson(doc, json);
@@ -453,14 +453,14 @@ bool JsonSettingsIO::loadBookFusion(BookFusionTokenStore& store, const char* jso
   }
 
   bool ok = false;
-  store.accessToken = obfuscation::deobfuscateFromBase64(doc["token_obf"] | "", &ok);
+  store.setToken(obfuscation::deobfuscateFromBase64(doc["token_obf"] | "", &ok));
 
   if (!ok) {
     LOG_ERR("BFS", "Failed to decode BookFusion token");
-    store.accessToken.clear();
+    store.clearToken();
     return false;
   }
 
-  LOG_DBG("BFS", "Loaded BookFusion token (%zu chars)", store.accessToken.size());
+  LOG_DBG("BFS", "Loaded BookFusion token (%zu chars)", store.getToken().size());
   return true;
 }
