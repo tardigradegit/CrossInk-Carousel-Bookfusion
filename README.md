@@ -14,7 +14,9 @@ A new selectable UI theme called "Flow", inheriting from Lyra and overriding onl
 
 ### BookFusion Sync
 
-**Native BookFusion integration.** This fork adds first-class BookFusion sync support to CrossInk Carousel. Link your BookFusion account from Settings → BookFusion, and your library, reading progress, and book downloads stay in sync automatically.
+**Native BookFusion integration.** This fork adds first-class BookFusion sync support to CrossInk Carousel. Link your BookFusion account from Settings → BookFusion Sync, and your library, reading progress, and book downloads stay in sync automatically.
+
+**Library browser in File Transfer.** Once your account is linked, a "Bookfusion" entry appears directly in the File Transfer menu — the same place you go to connect Calibre or join a network. Browse and download books without digging through Settings.
 
 **Library browser with categories.** Browse your BookFusion library directly on the device, organized by category.
 

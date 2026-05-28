@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.3.4] - 2026-05-28
+
+### Changed
+- BookFusion library browser moved from Settings to the File Transfer menu. Once your account is linked, a "Bookfusion" row appears alongside Join a Network / Connect to Calibre / Create Hotspot. The entry is hidden when no account is linked, so unlinked devices see no change.
+
 ## [v1.2.11.1] - 2026-05-16
 
 ### Added
