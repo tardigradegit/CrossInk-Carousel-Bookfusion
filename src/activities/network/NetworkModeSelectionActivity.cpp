@@ -3,12 +3,14 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 
+#include "BookFusionTokenStore.h"
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
 namespace {
-constexpr int MENU_ITEM_COUNT = 3;
+constexpr int MAX_MENU_ITEM_COUNT = 4;
+int visibleMenuItemCount() { return BF_TOKEN_STORE.hasToken() ? 4 : 3; }
 }  // namespace
 
 void NetworkModeSelectionActivity::onEnter() {
@@ -37,6 +39,8 @@ void NetworkModeSelectionActivity::loop() {
       mode = NetworkMode::CONNECT_CALIBRE;
     } else if (selectedIndex == 2) {
       mode = NetworkMode::CREATE_HOTSPOT;
+    } else if (selectedIndex == 3) {
+      mode = NetworkMode::BOOKFUSION;
     }
     onModeSelected(mode);
     return;
@@ -44,12 +48,12 @@ void NetworkModeSelectionActivity::loop() {
 
   // Handle navigation
   buttonNavigator.onNext([this] {
-    selectedIndex = ButtonNavigator::nextIndex(selectedIndex, MENU_ITEM_COUNT);
+    selectedIndex = ButtonNavigator::nextIndex(selectedIndex, visibleMenuItemCount());
     requestUpdate();
   });
 
   buttonNavigator.onPrevious([this] {
-    selectedIndex = ButtonNavigator::previousIndex(selectedIndex, MENU_ITEM_COUNT);
+    selectedIndex = ButtonNavigator::previousIndex(selectedIndex, visibleMenuItemCount());
     requestUpdate();
   });
 }
@@ -66,14 +70,16 @@ void NetworkModeSelectionActivity::render(RenderLock&&) {
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
   // Menu items and descriptions
-  static constexpr StrId menuItems[MENU_ITEM_COUNT] = {StrId::STR_JOIN_NETWORK, StrId::STR_CALIBRE_WIRELESS,
-                                                       StrId::STR_CREATE_HOTSPOT};
-  static constexpr StrId menuDescs[MENU_ITEM_COUNT] = {StrId::STR_JOIN_DESC, StrId::STR_CALIBRE_DESC,
-                                                       StrId::STR_HOTSPOT_DESC};
-  static constexpr UIIcon menuIcons[MENU_ITEM_COUNT] = {UIIcon::Wifi, UIIcon::Library, UIIcon::Hotspot};
+  static constexpr StrId menuItems[MAX_MENU_ITEM_COUNT] = {StrId::STR_JOIN_NETWORK, StrId::STR_CALIBRE_WIRELESS,
+                                                            StrId::STR_CREATE_HOTSPOT, StrId::STR_BF_BROWSE_LIBRARY};
+  static constexpr StrId menuDescs[MAX_MENU_ITEM_COUNT] = {StrId::STR_JOIN_DESC, StrId::STR_CALIBRE_DESC,
+                                                            StrId::STR_HOTSPOT_DESC, StrId::STR_BF_LIBRARY_DESC};
+  static constexpr UIIcon menuIcons[MAX_MENU_ITEM_COUNT] = {UIIcon::Wifi, UIIcon::Library, UIIcon::Hotspot,
+                                                             UIIcon::Library};
 
+  const int count = visibleMenuItemCount();
   GUI.drawList(
-      renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(MENU_ITEM_COUNT), selectedIndex,
+      renderer, Rect{0, contentTop, pageWidth, contentHeight}, count, selectedIndex,
       [](int index) { return std::string(I18N.get(menuItems[index])); },
       [](int index) { return std::string(I18N.get(menuDescs[index])); }, [](int index) { return menuIcons[index]; });
 
