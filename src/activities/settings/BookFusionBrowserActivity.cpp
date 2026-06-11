@@ -145,11 +145,16 @@ void BookFusionBrowserActivity::startDownload(int bookIndex) {
   const std::string filename = "/" + StringUtils::sanitizeFilename(baseName) + "." + ext;
   LOG_DBG("BFB", "Downloading book_id=%lu -> %s", static_cast<unsigned long>(book.id), filename.c_str());
 
+  lastProgressUpdateMs = 0;
   const auto dlResult =
       HttpDownloader::downloadToFile(downloadUrl, filename, [this](const size_t downloaded, const size_t total) {
+        const unsigned long currentMs = millis();
         downloadProgress = downloaded;
         downloadTotal = total;
-        requestUpdate(true);
+        if (lastProgressUpdateMs == 0 || currentMs - lastProgressUpdateMs >= 2000) {
+          lastProgressUpdateMs = currentMs;
+          requestUpdate(true);
+        }
       });
 
   if (dlResult != HttpDownloader::OK) {
