@@ -12,7 +12,7 @@
 
 namespace {
 // Add auth and accept headers to an authenticated request.
-void addAuthHeaders(HTTPClient& http) {
+void addAuthHeaders(HTTPClient& http) {h
   const std::string bearer = "Bearer " + BF_TOKEN_STORE.getToken();
   http.addHeader("Authorization", bearer.c_str());
   http.addHeader("Accept", BookFusionSyncClient::API_ACCEPT);
@@ -220,15 +220,17 @@ BookFusionSyncClient::Error BookFusionSyncClient::searchBooks(int page, BookFusi
   WiFiClientSecure secureClient;
   secureClient.setInsecure();
   HTTPClient http;
+  // Force HTTP/1.0: the server closes the connection after the response body,
+  // so ArduinoJson can stream-parse via secureClient.connected() without
+  // buffering the full response in heap. The previous String-buffered approach
+  // caused intermittent JSON_ERROR when heap fragmentation prevented a
+  // contiguous allocation for String::reserve() on larger responses.
+  http.useHTTP10(true);
   http.begin(secureClient, url);
   addAuthHeaders(http);
   http.addHeader("Content-Type", "application/json");
 
-  // 8 books per display page keeps the raw response under ~20 KB.
-  // Arduino String grows by doubling: a 53 KB response (21 books) needs a
-  // ~64 KB buffer during the final realloc, pushing peak heap above 113 KB.
-  // With 8 books the response is ~20 KB → peak ~40 KB, well within budget.
-  // Request 9 to detect hasMore without needing response headers.
+  // Request BOOKS_PER_PAGE + 1 to detect hasMore without inspecting response headers.
   static constexpr int BOOKS_PER_PAGE = 8;
 
   JsonDocument reqBody;
@@ -254,23 +256,22 @@ BookFusionSyncClient::Error BookFusionSyncClient::searchBooks(int page, BookFusi
     return SERVER_ERROR;
   }
 
-  // Read the full response body before parsing. Streaming from WiFiClientSecure
-  // causes IncompleteInput errors because TLS chunks arrive after ArduinoJson
-  // has already read past the end of what was buffered.
-  String responseBody = http.getString();
-  http.end();
-
-  // Build a filter that discards every field except the four we need.
+  // Build a filter that discards every field except the four we display.
   // BookFusion books carry ~20 fields (cover URLs, descriptions, etc.); keeping
-  // only what we display reduces JsonDocument heap from ~30 KB to ~5 KB.
+  // only what we need reduces JsonDocument heap from ~30 KB to ~5 KB.
   JsonDocument filter;
   filter[0]["id"] = true;
   filter[0]["title"] = true;
   filter[0]["format"] = true;
   filter[0]["authors"][0]["name"] = true;
 
+  // Stream-parse directly from the TLS client (WiFiClientSecure implements
+  // Client, so ArduinoJson uses connected() to detect end-of-body rather than
+  // relying on available(), which returns 0 between TLS records and previously
+  // caused IncompleteInput on raw Stream parsing).
   JsonDocument doc;
-  const auto parseErr = deserializeJson(doc, responseBody, DeserializationOption::Filter(filter));
+  const auto parseErr = deserializeJson(doc, secureClient, DeserializationOption::Filter(filter));
+  http.end();
 
   if (parseErr != DeserializationError::Ok) {
     LOG_ERR("BFS", "searchBooks JSON parse error: %s", parseErr.c_str());
