@@ -12,7 +12,7 @@
 
 namespace {
 // Add auth and accept headers to an authenticated request.
-void addAuthHeaders(HTTPClient& http) {h
+void addAuthHeaders(HTTPClient& http) {
   const std::string bearer = "Bearer " + BF_TOKEN_STORE.getToken();
   http.addHeader("Authorization", bearer.c_str());
   http.addHeader("Accept", BookFusionSyncClient::API_ACCEPT);
