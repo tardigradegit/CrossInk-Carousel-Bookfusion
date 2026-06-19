@@ -21,6 +21,8 @@
 #include "BookFusionBookIdStore.h"
 #include "BookFusionSyncActivity.h"
 #include "BookFusionTokenStore.h"
+#include "StorytellerSyncActivity.h"
+#include "StorytellerTokenStore.h"
 #include "BookStatsActivity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -920,6 +922,30 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
         activityManager.replaceActivity(std::make_unique<KOReaderSyncActivity>(
             renderer, mappedInput, savedEpubPath, currentSpineIndex, currentPage, totalPages, std::move(localKoPos),
             std::move(localChapterName), paragraphIndex));
+      }
+      break;
+    }
+    case EpubReaderMenuActivity::MenuAction::STORYTELLER_SYNC: {
+      if (ST_TOKEN_STORE.hasToken()) {
+        const int currentPage = section ? section->currentPage : 0;
+        const int totalPages = section ? section->pageCount : 0;
+
+        auto applySyncResult = [this](const ActivityResult& result) {
+          if (!result.isCancelled) {
+            const auto& sync = std::get<SyncResult>(result.data);
+            if (currentSpineIndex != sync.spineIndex || (section && section->currentPage != sync.page)) {
+              RenderLock lock(*this);
+              currentSpineIndex = sync.spineIndex;
+              nextPageNumber = sync.page;
+              section.reset();
+            }
+          }
+        };
+
+        startActivityForResult(
+            std::make_unique<StorytellerSyncActivity>(renderer, mappedInput, epub, epub->getPath(),
+                                                      currentSpineIndex, currentPage, totalPages),
+            applySyncResult);
       }
       break;
     }
