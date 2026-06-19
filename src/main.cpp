@@ -19,7 +19,6 @@
 #include <cstring>
 
 #include "BookFusionTokenStore.h"
-#include "StorytellerTokenStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "GlobalActions.h"
@@ -28,6 +27,7 @@
 #include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
 #include "SdCardFontSystem.h"
+#include "StorytellerTokenStore.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
 #include "activities/reader/KOReaderSyncActivity.h"

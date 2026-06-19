@@ -5,9 +5,9 @@
 #include <string>
 
 struct StorytellerPosition {
-  std::string href;        // EPUB spine-item href, e.g. "OEBPS/chapter3.xhtml"
-  float totalProgression;  // 0.0–1.0 whole-book position
-  uint64_t timestamp;      // milliseconds since epoch (0 = use current time)
+  std::string href;              // EPUB spine-item href, e.g. "OEBPS/chapter3.xhtml"
+  float totalProgression = 0.0f; // 0.0–1.0 whole-book position
+  uint64_t timestamp = 0;        // milliseconds since epoch (0 = use current time)
 };
 
 struct StorytellerDeviceCodeResponse {

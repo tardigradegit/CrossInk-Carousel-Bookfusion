@@ -2,12 +2,13 @@
 
 #include <string>
 
-// Forward-declare the I/O helpers so friend declarations below compile
-// without pulling in StorytellerJsonIO.h (which would create a circular
-// include between TokenStore ↔ JsonIO).
+// Forward-declare at global scope first so the namespace block below can
+// reference ::StorytellerTokenStore without creating a nested class.
+class StorytellerTokenStore;
+
 namespace StorytellerJsonIO {
-bool save(const class StorytellerTokenStore&, const char*);
-bool load(class StorytellerTokenStore&, const char*);
+bool save(const StorytellerTokenStore&, const char*);
+bool load(StorytellerTokenStore&, const char*);
 }  // namespace StorytellerJsonIO
 
 class StorytellerTokenStore {
