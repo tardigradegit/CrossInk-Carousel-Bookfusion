@@ -30,12 +30,6 @@ A new selectable UI theme called "Flow", inheriting from Lyra and overriding onl
 
 > See [BOOKFUSION_INTEGRATION.md](https://github.com/tardigradegit/CrossInk-Carousel-Bookfusion/blob/main/BOOKFUSION_INTEGRATION.md) for full setup instructions.
 
-### Storyteller Sync
-
-**Native Storyteller sync.** This fork adds reading-progress sync with a self-hosted [Storyteller](https://storyteller-platform.dev) server, joining the existing BookFusion and KOReader sync options. Link the device to your Storyteller instance and your reading position stays in sync across your library.
-
-**Setup in Settings → System → Storyteller Sync.** Enter your Storyteller server URL, then link your account. The screen shows your linked status and lets you unlink at any time.
-
 ### Recent Books Grid
 
 Replaced the plain list of book titles with a 3x3 grid of cover thumbnails, paginated when more than nine books exist. Page indicator dots sit at the bottom. Thumbnails are generated on demand the first time a page is viewed — loading will be much faster on subsequent views. Visual concept ported from CrossPoint Flow.
