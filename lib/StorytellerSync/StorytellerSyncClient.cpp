@@ -169,8 +169,7 @@ StorytellerSyncClient::Error StorytellerSyncClient::getProgress(const char* book
   return SERVER_ERROR;
 }
 
-StorytellerSyncClient::Error StorytellerSyncClient::setProgress(const char* bookUuid,
-                                                                const StorytellerPosition& pos) {
+StorytellerSyncClient::Error StorytellerSyncClient::setProgress(const char* bookUuid, const StorytellerPosition& pos) {
   if (!ST_TOKEN_STORE.hasToken()) return NO_TOKEN;
   if (!ST_TOKEN_STORE.hasServerUrl()) return NO_SERVER_URL;
 
@@ -229,9 +228,18 @@ StorytellerSyncClient::Error StorytellerSyncClient::getBooks(StorytellerBookList
   const int httpCode = http.GET();
   LOG_DBG("STS", "getBooks response: %d", httpCode);
 
-  if (httpCode < 0) { http.end(); return NETWORK_ERROR; }
-  if (httpCode == 401) { http.end(); return AUTH_FAILED; }
-  if (httpCode != 200) { http.end(); return SERVER_ERROR; }
+  if (httpCode < 0) {
+    http.end();
+    return NETWORK_ERROR;
+  }
+  if (httpCode == 401) {
+    http.end();
+    return AUTH_FAILED;
+  }
+  if (httpCode != 200) {
+    http.end();
+    return SERVER_ERROR;
+  }
 
   JsonDocument filter;
   filter[0]["uuid"] = true;
@@ -265,19 +273,33 @@ StorytellerSyncClient::Error StorytellerSyncClient::getBooks(StorytellerBookList
 
 const char* StorytellerSyncClient::errorString(Error error) {
   switch (error) {
-    case OK: return "Success";
-    case NO_TOKEN: return "Not logged in to Storyteller";
-    case NO_SERVER_URL: return "Storyteller server URL not set";
-    case NETWORK_ERROR: return "Network error";
-    case AUTH_FAILED: return "Authentication failed";
-    case SERVER_ERROR: return "Server error (try again later)";
-    case JSON_ERROR: return "JSON parse error";
-    case NOT_FOUND: return "No progress found";
-    case CONFLICT: return "Server position is newer";
-    case PENDING: return "Authorization pending";
-    case SLOW_DOWN: return "Slow down polling";
-    case EXPIRED: return "Device code expired";
-    case DENIED: return "Authorization denied";
-    default: return "Unknown error";
+    case OK:
+      return "Success";
+    case NO_TOKEN:
+      return "Not logged in to Storyteller";
+    case NO_SERVER_URL:
+      return "Storyteller server URL not set";
+    case NETWORK_ERROR:
+      return "Network error";
+    case AUTH_FAILED:
+      return "Authentication failed";
+    case SERVER_ERROR:
+      return "Server error (try again later)";
+    case JSON_ERROR:
+      return "JSON parse error";
+    case NOT_FOUND:
+      return "No progress found";
+    case CONFLICT:
+      return "Server position is newer";
+    case PENDING:
+      return "Authorization pending";
+    case SLOW_DOWN:
+      return "Slow down polling";
+    case EXPIRED:
+      return "Device code expired";
+    case DENIED:
+      return "Authorization denied";
+    default:
+      return "Unknown error";
   }
 }
