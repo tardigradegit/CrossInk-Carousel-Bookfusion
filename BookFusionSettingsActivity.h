@@ -1,5 +1,3 @@
-#include "BookFusionSyncActivity.h"
-
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
@@ -8,6 +6,7 @@
 #include <cstdio>
 
 #include "BookFusionBookIdStore.h"
+#include "BookFusionSyncActivity.h"
 #include "BookFusionSyncClient.h"
 #include "BookFusionTokenStore.h"
 #include "MappedInputManager.h"

@@ -3,12 +3,12 @@
 #include <GfxRenderer.h>
 #include <Logging.h>
 
+#include "BookFusionSettingsActivity.h"
 #include "ButtonRemapActivity.h"
 #include "ClearCacheActivity.h"
+#include "CrossPointSettings.h"
 #include "FontDownloadActivity.h"
 #include "FontSelectionActivity.h"
-#include "CrossPointSettings.h"
-#include "BookFusionSettingsActivity.h"
 #include "KOReaderSettingsActivity.h"
 #include "LanguageSelectActivity.h"
 #include "MappedInputManager.h"
@@ -18,6 +18,7 @@
 #include "SdFirmwareUpdateActivity.h"
 #include "SettingsList.h"
 #include "StatusBarSettingsActivity.h"
+#include "StorytellerSettingsActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -71,6 +72,7 @@ void SettingsActivity::rebuildSettingsLists() {
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_BF_SYNC, SettingAction::BookFusionSync));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_ST_SYNC, SettingAction::StorytellerSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
@@ -292,6 +294,9 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::BookFusionSync:
         startActivityForResult(std::make_unique<BookFusionSettingsActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::StorytellerSync:
+        startActivityForResult(std::make_unique<StorytellerSettingsActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::OPDSBrowser:
         startActivityForResult(std::make_unique<OpdsServerListActivity>(renderer, mappedInput), resultHandler);

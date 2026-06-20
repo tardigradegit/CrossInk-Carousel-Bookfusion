@@ -212,8 +212,8 @@ void LyraTheme::drawTabBar(const GfxRenderer& renderer, Rect rect, const std::ve
   const int barInsetLeft = oLeft + SETTINGS.screenMargin;
   const int barInsetRight = oRight + SETTINGS.screenMargin;
   if (selected) {
-    renderer.fillRectDither(rect.x + barInsetLeft, rect.y,
-                            std::max(0, rect.width - barInsetLeft - barInsetRight), rect.height, Color::LightGray);
+    renderer.fillRectDither(rect.x + barInsetLeft, rect.y, std::max(0, rect.width - barInsetLeft - barInsetRight),
+                            rect.height, Color::LightGray);
   }
 
   for (const auto& tab : tabs) {

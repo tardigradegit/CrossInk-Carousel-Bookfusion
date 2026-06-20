@@ -161,7 +161,6 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   file.close();
   http.end();
 
-
   if (writeResult < 0) {
     LOG_ERR("HTTP", "writeToStream error: %d", writeResult);
     Storage.remove(destPath.c_str());

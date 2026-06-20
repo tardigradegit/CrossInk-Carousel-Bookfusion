@@ -1,5 +1,3 @@
-#include "BookFusionSyncClient.h"
-
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <Logging.h>
@@ -8,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "BookFusionSyncClient.h"
 #include "BookFusionTokenStore.h"
 
 namespace {

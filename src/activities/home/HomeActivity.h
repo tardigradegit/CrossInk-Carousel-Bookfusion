@@ -67,6 +67,7 @@ class HomeActivity final : public Activity {
   void onReadingStatsOpen();
   void onBookmarksOpen();
 
+  // cppcheck-suppress unusedPrivateFunction
   int getMenuItemCount() const;
   bool storeCoverBuffer();    // Store frame buffer for cover image
   bool restoreCoverBuffer();  // Restore frame buffer from stored cover
