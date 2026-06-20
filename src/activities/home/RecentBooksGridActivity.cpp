@@ -200,8 +200,9 @@ void RecentBooksGridActivity::render(RenderLock&&) {
     const int budget = (pageWidth - metrics.contentSidePadding * 2) - (2 * discRadius + kDiscGap);
     constexpr int gap = 12;  // separation between title and author
 
-    const int authorRawW =
-        sel.author.empty() ? 0 : renderer.getTextWidth(UI_12_FONT_ID, sel.author.c_str(), EpdFontFamily::REGULAR);
+    const int authorRawW = sel.author.empty()
+                               ? 0
+                               : renderer.getTextWidth(UI_12_FONT_ID, sel.author.c_str(), EpdFontFamily::REGULAR);
     const int authorReserved = sel.author.empty() ? 0 : (gap + authorRawW);
     const int titleMaxW = std::max(0, budget - authorReserved);
 
@@ -271,9 +272,10 @@ void RecentBooksGridActivity::render(RenderLock&&) {
       int bw = COVER_WIDTH;
       int bh = COVER_HEIGHT;
       bool drawn = false;
-      const std::string thumbPath = recentBooks[bookIdx].coverBmpPath.empty()
-                                        ? ""
-                                        : UITheme::getCoverThumbPath(recentBooks[bookIdx].coverBmpPath, COVER_HEIGHT);
+      const std::string thumbPath =
+          recentBooks[bookIdx].coverBmpPath.empty()
+              ? ""
+              : UITheme::getCoverThumbPath(recentBooks[bookIdx].coverBmpPath, COVER_HEIGHT);
       if (!thumbPath.empty() && Storage.exists(thumbPath.c_str())) {
         FsFile file;
         if (Storage.openFileForRead("RBGA", thumbPath, file)) {

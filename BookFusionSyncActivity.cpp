@@ -1,3 +1,5 @@
+#include "BookFusionBookIdStore.h"
+
 #include <ArduinoJson.h>
 #include <HalStorage.h>
 #include <Logging.h>
@@ -5,8 +7,6 @@
 
 #include <cstdio>
 #include <cstring>
-
-#include "BookFusionBookIdStore.h"
 
 void BookFusionBookIdStore::buildSidecarPath(const char* epubPath, char* outPath, size_t maxLen) {
   MD5Builder md5;

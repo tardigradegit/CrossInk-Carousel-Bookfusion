@@ -17,7 +17,7 @@
 // kept untouched for clean upstream merges.
 class RecentBooksGridActivity final : public Activity {
  public:
-  static constexpr int BOOKS_PER_PAGE = 9;  // 3 cols x 3 rows
+  static constexpr int BOOKS_PER_PAGE = 9;   // 3 cols x 3 rows
   static constexpr int MAX_BOOKS = BOOKS_PER_PAGE * 2;
   // X3-tuned slot. 136×204 keeps the 2:3 aspect that matches a typical book
   // cover (bitmaps fill the slot without padding). Sized in tandem with the

@@ -10,8 +10,9 @@
 
 class StorytellerSyncActivity : public Activity {
  public:
-  StorytellerSyncActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::shared_ptr<Epub> epub,
-                          std::string epubPath, int currentSpineIndex, int currentPage, int totalPagesInSpine)
+  StorytellerSyncActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
+                          std::shared_ptr<Epub> epub, std::string epubPath, int currentSpineIndex,
+                          int currentPage, int totalPagesInSpine)
       : Activity("StorytellerSync", renderer, mappedInput),
         epub(std::move(epub)),
         epubPath(std::move(epubPath)),
@@ -19,7 +20,9 @@ class StorytellerSyncActivity : public Activity {
         currentPage(currentPage),
         totalPagesInSpine(totalPagesInSpine) {}
 
-  bool preventAutoSleep() override { return state == RESOLVING_BOOK || state == SYNCING || state == UPLOADING; }
+  bool preventAutoSleep() override {
+    return state == RESOLVING_BOOK || state == SYNCING || state == UPLOADING;
+  }
 
   void onEnter() override;
   void onExit() override;

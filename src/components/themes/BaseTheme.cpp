@@ -399,8 +399,9 @@ void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
   }
 
   if (title) {
-    auto truncatedTitle = renderer.truncatedText(
-        UI_12_FONT_ID, title, rect.width - BaseMetrics::values.contentSidePadding * 2, EpdFontFamily::BOLD);
+    auto truncatedTitle = renderer.truncatedText(UI_12_FONT_ID, title,
+                                                 rect.width - BaseMetrics::values.contentSidePadding * 2,
+                                                 EpdFontFamily::BOLD);
     renderer.drawCenteredText(UI_12_FONT_ID, rect.y + 5, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
   }
 
@@ -789,6 +790,8 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   static constexpr int bmIconH = 14;
   static constexpr int bmIconGap = 4;
   static constexpr int bmNotchDepth = 5;
+  const int bmTotalWidth = isPageBookmarked ? (bmIconW + bmIconGap) : 0;
+
   if (isPageBookmarked) {
     const int bmX = metrics.statusBarHorizontalMargin + orientedMarginLeft + 1;
     // +5 compensates for the battery nub drawn above the rect origin by drawBatteryLeft,

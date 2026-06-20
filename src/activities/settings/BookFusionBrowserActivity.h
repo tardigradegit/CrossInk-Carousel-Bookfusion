@@ -8,13 +8,13 @@
 
 /**
  * Browse and download books from the user's BookFusion library.
- *
- * Shows the user's library 20 books at a time (paginated).
- * Selecting a book fetches a pre-signed download URL, streams the EPUB
+  *
+  * Shows the user's library 20 books at a time (paginated).
+  * Selecting a book fetches a pre-signed download URL, streams the EPUB
  * to the SD card, and writes a BookFusion sidecar via BookFusionBookIdStore
  * so that progress sync works immediately after download.
- *
- * Requires a linked BookFusion account (token in BF_TOKEN_STORE).
+  *
+  * Requires a linked BookFusion account (token in BF_TOKEN_STORE).
  */
 class BookFusionBrowserActivity final : public Activity {
  public:

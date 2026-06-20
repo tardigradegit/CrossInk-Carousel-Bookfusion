@@ -71,11 +71,11 @@ void NetworkModeSelectionActivity::render(RenderLock&&) {
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
   // Menu items and descriptions
   static constexpr StrId menuItems[MAX_MENU_ITEM_COUNT] = {StrId::STR_JOIN_NETWORK, StrId::STR_CALIBRE_WIRELESS,
-                                                           StrId::STR_CREATE_HOTSPOT, StrId::STR_BF_BROWSE_LIBRARY};
+                                                            StrId::STR_CREATE_HOTSPOT, StrId::STR_BF_BROWSE_LIBRARY};
   static constexpr StrId menuDescs[MAX_MENU_ITEM_COUNT] = {StrId::STR_JOIN_DESC, StrId::STR_CALIBRE_DESC,
-                                                           StrId::STR_HOTSPOT_DESC, StrId::STR_BF_LIBRARY_DESC};
+                                                            StrId::STR_HOTSPOT_DESC, StrId::STR_BF_LIBRARY_DESC};
   static constexpr UIIcon menuIcons[MAX_MENU_ITEM_COUNT] = {UIIcon::Wifi, UIIcon::Library, UIIcon::Hotspot,
-                                                            UIIcon::Library};
+                                                             UIIcon::Library};
 
   const int count = visibleMenuItemCount();
   GUI.drawList(

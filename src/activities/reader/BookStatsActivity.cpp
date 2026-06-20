@@ -245,8 +245,9 @@ void BookStatsActivity::render(RenderLock&&) {
           // so books with slightly different aspect ratios get a snug border.
           const int awBox = std::min(kCoverMaxW, static_cast<int>(std::round(srcW * fitScale)));
           const int ahBox = std::min(kCoverMaxH, static_cast<int>(std::round(srcH * fitScale)));
-          const float actualScale = std::min(static_cast<float>(awBox) / static_cast<float>(srcW),
-                                             static_cast<float>(ahBox) / static_cast<float>(srcH));
+          const float actualScale =
+              std::min(static_cast<float>(awBox) / static_cast<float>(srcW),
+                       static_cast<float>(ahBox) / static_cast<float>(srcH));
           const int aw = static_cast<int>(std::floor((srcW - 1) * actualScale)) + 1;
           const int ah = static_cast<int>(std::floor((srcH - 1) * actualScale)) + 1;
           // Bitmap shifted down by kCoverBorder so the border-top aligns
@@ -313,11 +314,11 @@ void BookStatsActivity::render(RenderLock&&) {
                       // edge clips off-screen; we emit it anyway for
                       // symmetry with the main cover.
                       renderer.fillRect(peekX - peekBorder, peekY - peekBorder, peekW + 2 * peekBorder, peekBorder,
-                                        true);  // top
+                                        true);                                                       // top
                       renderer.fillRect(peekX - peekBorder, peekY + ph, peekW + 2 * peekBorder, peekBorder,
-                                        true);                                             // bottom
-                      renderer.fillRect(peekX - peekBorder, peekY, peekBorder, ph, true);  // left
-                      renderer.fillRect(peekX + peekW, peekY, peekBorder, ph, true);       // right
+                                        true);                                                       // bottom
+                      renderer.fillRect(peekX - peekBorder, peekY, peekBorder, ph, true);            // left
+                      renderer.fillRect(peekX + peekW, peekY, peekBorder, ph, true);                 // right
                     }
                     adjFile.close();
                   }
@@ -467,8 +468,8 @@ void BookStatsActivity::render(RenderLock&&) {
     BookReadingStats::formatDuration(globalAvgSecs, gAvgBuf, sizeof(gAvgBuf));
   }
   if (globalStats.totalReadingSeconds > 60) {
-    const float gppm =
-        static_cast<float>(globalStats.totalPagesTurned) * 60.0f / static_cast<float>(globalStats.totalReadingSeconds);
+    const float gppm = static_cast<float>(globalStats.totalPagesTurned) * 60.0f /
+                       static_cast<float>(globalStats.totalReadingSeconds);
     snprintf(gPpmBuf, sizeof(gPpmBuf), "%.1f", gppm);
   } else {
     snprintf(gPpmBuf, sizeof(gPpmBuf), "0.0");
