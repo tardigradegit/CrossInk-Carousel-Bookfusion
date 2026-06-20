@@ -6,9 +6,9 @@
 class StorytellerAuthActivity : public Activity {
  public:
   StorytellerAuthActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
-      : Activity(renderer, mappedInput) {}
+      : Activity("StorytellerAuth", renderer, mappedInput) {}
 
-  bool preventAutoSleep() const override { return true; }
+  bool preventAutoSleep() override { return true; }
 
   void onEnter() override;
   void onExit() override {}

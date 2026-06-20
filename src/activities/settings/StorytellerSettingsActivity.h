@@ -5,7 +5,7 @@
 class StorytellerSettingsActivity : public Activity {
  public:
   StorytellerSettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
-      : Activity(renderer, mappedInput) {}
+      : Activity("StorytellerSettings", renderer, mappedInput) {}
 
   void onEnter() override;
   void loop() override;

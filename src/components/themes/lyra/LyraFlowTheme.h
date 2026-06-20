@@ -20,17 +20,17 @@ constexpr ThemeMetrics values = [] {
   // and the menu icon-strip top.
   v.homeCoverHeight = 392;
   v.homeCoverTileHeight = 639;
-  v.homeRecentBooksCount = 5;    // matches the 5 carousel slots visible at once
-                                 // (center + 2 sides each direction). Capped at 5 to
-                                 // avoid first-boot OOM during sequential thumb gen on
-                                 // ESP32-C3 — see HomeActivity::loadRecentCovers.
-  v.homeTopPadding = 41;         // header height unchanged from X4 — battery icon at
-                                 // y+5 doesn't need more vertical room on the wider
-                                 // panel, and keeping the header tight preserves
-                                 // menu space below the (taller) carousel.
-  v.homeMenuTopOffset = 16;      // No more time-read line under the cover, so
-                                 // this gap collapses to a standard 16 px
-                                 // (matches metrics.verticalSpacing).
+  v.homeRecentBooksCount = 5;  // matches the 5 carousel slots visible at once
+                               // (center + 2 sides each direction). Capped at 5 to
+                               // avoid first-boot OOM during sequential thumb gen on
+                               // ESP32-C3 — see HomeActivity::loadRecentCovers.
+  v.homeTopPadding = 41;       // header height unchanged from X4 — battery icon at
+                               // y+5 doesn't need more vertical room on the wider
+                               // panel, and keeping the header tight preserves
+                               // menu space below the (taller) carousel.
+  v.homeMenuTopOffset = 16;    // No more time-read line under the cover, so
+                               // this gap collapses to a standard 16 px
+                               // (matches metrics.verticalSpacing).
   return v;
 }();
 }  // namespace LyraFlowMetrics
