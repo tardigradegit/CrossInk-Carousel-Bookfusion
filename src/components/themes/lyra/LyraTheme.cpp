@@ -240,7 +240,7 @@ void LyraTheme::drawTabBar(const GfxRenderer& renderer, Rect rect, const std::ve
   // Underline inset by the same amount the battery top bar uses so all
   // full-screen-width horizontal lines share the same gutters.
   {
-    int oTop, oRight, oBottom, oLeft;
+    // Reuse the oriented margins variables declared earlier to avoid shadowing.
     renderer.getOrientedViewableTRBL(&oTop, &oRight, &oBottom, &oLeft);
     const int inL = oLeft + SETTINGS.screenMargin;
     const int inR = oRight + SETTINGS.screenMargin;

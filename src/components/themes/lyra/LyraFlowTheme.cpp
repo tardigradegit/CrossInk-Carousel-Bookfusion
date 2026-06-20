@@ -82,7 +82,7 @@ const uint8_t* lyraFlowMenuIcon(UIIcon icon) {
 
 // Erase pixels outside a rounded-corner mask so a rectangular bitmap blit
 // looks like a rounded book cover. Same trick as the reference FlowTheme.
-void cutRoundedCorners(GfxRenderer& renderer, int x, int y, int w, int h, int r) {
+void cutRoundedCorners(const GfxRenderer& renderer, int x, int y, int w, int h, int r) {
   const int rSq = r * r;
   for (int dy = 0; dy < r; dy++) {
     for (int dx = 0; dx < r; dx++) {
@@ -276,7 +276,7 @@ void LyraFlowTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
     const size_t lastSlash = filename.find_last_of('/');
     if (lastSlash != std::string::npos) filename = filename.substr(lastSlash + 1);
     const size_t lastDot = filename.find_last_of('.');
-    if (lastDot != std::string::npos && lastDot > 0) filename = filename.substr(0, lastDot);
+    if (lastDot != std::string::npos && lastDot > 0) filename.resize(lastDot);
   }
 
   // Tight progress bar hugging the bottom of the cover (4 px gap). Same

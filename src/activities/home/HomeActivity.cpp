@@ -60,7 +60,9 @@ enum class HomeMenuAction {
 };
 
 struct HomeMenuItem {
+  // cppcheck-suppress unusedStructMember
   const char* label;
+  // cppcheck-suppress unusedStructMember
   UIIcon icon;
   HomeMenuAction action;
 };
@@ -1077,7 +1079,7 @@ void HomeActivity::render(RenderLock&&) {
       for (int sy = kTop; sy < kTop + kStroke; ++sy) {
         int inset = 0;
         if (sy == kTop) inset = 2;
-        else if (sy == kTop + 1) inset = 1;
+        else inset = 1;
         fillSpan(kLeft + inset, kRight - inset, sy);
       }
       // Left and right verticals — same inset at the top two rows so they
