@@ -7,12 +7,11 @@
 #include <cstdio>
 
 #include "MappedInputManager.h"
+#include "StorytellerAuthActivity.h"
 #include "StorytellerTokenStore.h"
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
-
-#include "StorytellerAuthActivity.h"
 
 void StorytellerSettingsActivity::onEnter() {
   Activity::onEnter();
@@ -25,21 +24,20 @@ void StorytellerSettingsActivity::handleSelection() {
     case MENU_SET_SERVER_URL: {
       const std::string& current = ST_TOKEN_STORE.getServerUrl();
       const std::string prefill = current.empty() ? "https://" : current;
-      startActivityForResult(
-          std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_ST_SERVER_URL), prefill.c_str(), 128,
-                                                 InputType::Url),
-          [this](const ActivityResult& result) {
-            if (result.isCancelled) return;
-            const auto& entered = std::get<std::string>(result.data);
-            // Treat bare scheme as empty input
-            if (entered == "https://" || entered == "http://") {
-              ST_TOKEN_STORE.setServerUrl("");
-            } else {
-              ST_TOKEN_STORE.setServerUrl(entered);
-            }
-            ST_TOKEN_STORE.saveToFile();
-            requestUpdate();
-          });
+      startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_ST_SERVER_URL),
+                                                                     prefill.c_str(), 128, InputType::Url),
+                             [this](const ActivityResult& result) {
+                               if (result.isCancelled) return;
+                               const auto& entered = std::get<KeyboardResult>(result.data).text;
+                               // Treat bare scheme as empty input
+                               if (entered == "https://" || entered == "http://") {
+                                 ST_TOKEN_STORE.setServerUrl("");
+                               } else {
+                                 ST_TOKEN_STORE.setServerUrl(entered);
+                               }
+                               ST_TOKEN_STORE.saveToFile();
+                               requestUpdate();
+                             });
       break;
     }
 
@@ -99,8 +97,7 @@ void StorytellerSettingsActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight},
-                 tr(STR_ST_SETTINGS));
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_ST_SETTINGS));
 
   const int lineH = renderer.getLineHeight(UI_10_FONT_ID);
   const int itemHeight = lineH + 8;
@@ -131,8 +128,7 @@ void StorytellerSettingsActivity::render(RenderLock&&) {
 
   // --- Unlink Account ---
   if (selectedIndex == MENU_UNLINK_ACCOUNT) renderer.fillRect(0, y - 2, pageWidth - 1, itemHeight);
-  renderer.drawText(UI_10_FONT_ID, 20, y, tr(STR_ST_UNLINK_ACCOUNT),
-                    selectedIndex != MENU_UNLINK_ACCOUNT || !linked);
+  renderer.drawText(UI_10_FONT_ID, 20, y, tr(STR_ST_UNLINK_ACCOUNT), selectedIndex != MENU_UNLINK_ACCOUNT || !linked);
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

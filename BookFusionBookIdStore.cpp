@@ -1,10 +1,9 @@
-#include "BookFusionTokenStore.h"
-
 #include <HalStorage.h>
 #include <Logging.h>
 #include <ObfuscationUtils.h>
 
 #include "../../src/JsonSettingsIO.h"
+#include "BookFusionTokenStore.h"
 
 // Initialise static singleton instance
 BookFusionTokenStore BookFusionTokenStore::instance;

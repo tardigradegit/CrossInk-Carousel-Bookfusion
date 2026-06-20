@@ -296,9 +296,12 @@ float loadRecentBookProgressPercent(const RecentBook& book) {
 // loader above so we resolve the right cache directory per book.
 std::string statsCachePathForBook(const std::string& bookPath) {
   const char* prefix = nullptr;
-  if (FsHelpers::hasEpubExtension(bookPath)) prefix = "epub_";
-  else if (FsHelpers::hasXtcExtension(bookPath)) prefix = "xtc_";
-  else if (FsHelpers::hasTxtExtension(bookPath) || FsHelpers::hasMarkdownExtension(bookPath)) prefix = "txt_";
+  if (FsHelpers::hasEpubExtension(bookPath))
+    prefix = "epub_";
+  else if (FsHelpers::hasXtcExtension(bookPath))
+    prefix = "xtc_";
+  else if (FsHelpers::hasTxtExtension(bookPath) || FsHelpers::hasMarkdownExtension(bookPath))
+    prefix = "txt_";
   if (prefix == nullptr) return {};
   return "/.crosspoint/" + std::string(prefix) + std::to_string(std::hash<std::string>{}(bookPath));
 }
@@ -577,13 +580,27 @@ void HomeActivity::loop() {
       }
       if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
         switch (menuItems[minimalMenuIndex].action) {
-          case HomeMenuAction::BrowseFiles: onFileBrowserOpen(); break;
-          case HomeMenuAction::RecentBooks: onRecentsOpen(); break;
-          case HomeMenuAction::OpdsBrowser: onOpdsBrowserOpen(); break;
-          case HomeMenuAction::ReadingStats: onReadingStatsOpen(); break;
-          case HomeMenuAction::Bookmarks: onBookmarksOpen(); break;
-          case HomeMenuAction::FileTransfer: onFileTransferOpen(); break;
-          case HomeMenuAction::Settings: onSettingsOpen(); break;
+          case HomeMenuAction::BrowseFiles:
+            onFileBrowserOpen();
+            break;
+          case HomeMenuAction::RecentBooks:
+            onRecentsOpen();
+            break;
+          case HomeMenuAction::OpdsBrowser:
+            onOpdsBrowserOpen();
+            break;
+          case HomeMenuAction::ReadingStats:
+            onReadingStatsOpen();
+            break;
+          case HomeMenuAction::Bookmarks:
+            onBookmarksOpen();
+            break;
+          case HomeMenuAction::FileTransfer:
+            onFileTransferOpen();
+            break;
+          case HomeMenuAction::Settings:
+            onSettingsOpen();
+            break;
         }
       }
       return;
@@ -597,15 +614,13 @@ void HomeActivity::loop() {
     }
 
     if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
-      minimalHomeNavIndex = minimalHomeNavIndex < 0
-                                ? homeNavCount - 1
-                                : ButtonNavigator::previousIndex(minimalHomeNavIndex, homeNavCount);
+      minimalHomeNavIndex = minimalHomeNavIndex < 0 ? homeNavCount - 1
+                                                    : ButtonNavigator::previousIndex(minimalHomeNavIndex, homeNavCount);
       requestUpdate();
       return;
     }
     if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
-      minimalHomeNavIndex =
-          minimalHomeNavIndex < 0 ? 0 : ButtonNavigator::nextIndex(minimalHomeNavIndex, homeNavCount);
+      minimalHomeNavIndex = minimalHomeNavIndex < 0 ? 0 : ButtonNavigator::nextIndex(minimalHomeNavIndex, homeNavCount);
       requestUpdate();
       return;
     }
@@ -617,9 +632,15 @@ void HomeActivity::loop() {
           minimalMenuIndex = 0;
           requestUpdate();
           break;
-        case 1: onFileBrowserOpen(); break;
-        case 2: onSettingsOpen(); break;
-        case 3: onContinueReading(); break;
+        case 1:
+          onFileBrowserOpen();
+          break;
+        case 2:
+          onSettingsOpen();
+          break;
+        case 3:
+          onContinueReading();
+          break;
       }
     };
 
@@ -681,13 +702,27 @@ void HomeActivity::loop() {
       const int menuIdx = static_cast<int>(selectorIndex) - recentCount;
       if (menuIdx < 0 || menuIdx >= static_cast<int>(items.size())) return;
       switch (items[menuIdx].action) {
-        case HomeMenuAction::BrowseFiles: onFileBrowserOpen(); break;
-        case HomeMenuAction::RecentBooks: onRecentsOpen(); break;
-        case HomeMenuAction::OpdsBrowser: onOpdsBrowserOpen(); break;
-        case HomeMenuAction::ReadingStats: onReadingStatsOpen(); break;
-        case HomeMenuAction::Bookmarks: onBookmarksOpen(); break;
-        case HomeMenuAction::FileTransfer: onFileTransferOpen(); break;
-        case HomeMenuAction::Settings: onSettingsOpen(); break;
+        case HomeMenuAction::BrowseFiles:
+          onFileBrowserOpen();
+          break;
+        case HomeMenuAction::RecentBooks:
+          onRecentsOpen();
+          break;
+        case HomeMenuAction::OpdsBrowser:
+          onOpdsBrowserOpen();
+          break;
+        case HomeMenuAction::ReadingStats:
+          onReadingStatsOpen();
+          break;
+        case HomeMenuAction::Bookmarks:
+          onBookmarksOpen();
+          break;
+        case HomeMenuAction::FileTransfer:
+          onFileTransferOpen();
+          break;
+        case HomeMenuAction::Settings:
+          onSettingsOpen();
+          break;
       }
     }
     return;
@@ -762,13 +797,26 @@ void HomeActivity::loop() {
       onSelectBook(recentBooks[selectorIndex].path);
     } else {
       switch (menuIdx) {
-        case 0: onRecentsOpen(); break;
-        case 1: onReadingStatsOpen(); break;
-        case 2: onFileTransferOpen(); break;
-        case 3: onFileBrowserOpen(); break;
-        case 4: hasOpdsServers ? onOpdsBrowserOpen() : onBookmarksOpen(); break;
-        case 5: onSettingsOpen(); break;
-        default: break;
+        case 0:
+          onRecentsOpen();
+          break;
+        case 1:
+          onReadingStatsOpen();
+          break;
+        case 2:
+          onFileTransferOpen();
+          break;
+        case 3:
+          onFileBrowserOpen();
+          break;
+        case 4:
+          hasOpdsServers ? onOpdsBrowserOpen() : onBookmarksOpen();
+          break;
+        case 5:
+          onSettingsOpen();
+          break;
+        default:
+          break;
       }
     }
   }
@@ -786,10 +834,9 @@ void HomeActivity::render(RenderLock&&) {
   // recentCount + lastBookIndex so the same book stays centered.
   const int recentCountInt = static_cast<int>(recentBooks.size());
   const bool inMenuForCarousel = static_cast<int>(selectorIndex) >= recentCountInt;
-  const int carouselDisplayIndex =
-      (inMenuForCarousel && lastBookIndex >= 0 && lastBookIndex < recentCountInt)
-          ? recentCountInt + lastBookIndex
-          : static_cast<int>(selectorIndex);
+  const int carouselDisplayIndex = (inMenuForCarousel && lastBookIndex >= 0 && lastBookIndex < recentCountInt)
+                                       ? recentCountInt + lastBookIndex
+                                       : static_cast<int>(selectorIndex);
 
   // If the cached cover buffer was captured for a different book than the one
   // we're about to draw, drop it. This catches the race where loop() (main
@@ -863,20 +910,21 @@ void HomeActivity::render(RenderLock&&) {
   // CrossInk lyra carousel, so the swap is unconditional on hasOpdsServers
   // — flag if you want a different rule (e.g., only swap when there are also
   // no bookmarks saved).
-  const HomeMenuItem slot4 = hasOpdsServers
-                                 ? HomeMenuItem{LibraryIcon, false, tr(STR_OPDS_SERVERS)}
-                                 : HomeMenuItem{nullptr, true, tr(STR_BOOKMARKS)};
+  const HomeMenuItem slot4 = hasOpdsServers ? HomeMenuItem{LibraryIcon, false, tr(STR_OPDS_SERVERS)}
+                                            : HomeMenuItem{nullptr, true, tr(STR_BOOKMARKS)};
   const HomeMenuItem kHomeMenuItems[6] = {
-      {RecentIcon, false, tr(STR_MENU_RECENT_BOOKS)}, {ChartIcon, false, tr(STR_READING_STATS)},
-      {TransferIcon, false, tr(STR_FILE_TRANSFER)},   {FolderIcon, false, tr(STR_BROWSE_FILES)},
-      slot4,                                          {Settings2Icon, false, tr(STR_SETTINGS_TITLE)},
+      {RecentIcon, false, tr(STR_MENU_RECENT_BOOKS)},
+      {ChartIcon, false, tr(STR_READING_STATS)},
+      {TransferIcon, false, tr(STR_FILE_TRANSFER)},
+      {FolderIcon, false, tr(STR_BROWSE_FILES)},
+      slot4,
+      {Settings2Icon, false, tr(STR_SETTINGS_TITLE)},
   };
   constexpr int kHomeMenuCount = 6;
 
   GUI.drawRecentBookCover(renderer, Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight},
                           recentBooks, carouselDisplayIndex, coverRendered, coverBufferStored, bufferRestored,
-                          std::bind(&HomeActivity::storeCoverBuffer, this), centeredBookStats,
-                          centeredBookProgress);
+                          std::bind(&HomeActivity::storeCoverBuffer, this), centeredBookStats, centeredBookProgress);
 
   const int menuSelectedIndex =
       (selectorIndex >= recentBooks.size()) ? static_cast<int>(selectorIndex - recentBooks.size()) : -1;
@@ -926,12 +974,10 @@ void HomeActivity::render(RenderLock&&) {
     const auto frameHasReadingStats = hasReadingStats || hasAnyGlobalStats(globalStats);
     const auto items = buildHomeMenuItems(hasOpdsServers, frameHasReadingStats, hasBookmarks);
     const int menuTopY = metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing;
-    const int menuHeight =
-        pageHeight -
-        (metrics.headerHeight + metrics.homeTopPadding + metrics.verticalSpacing * 2 + metrics.buttonHintsHeight);
+    const int menuHeight = pageHeight - (metrics.headerHeight + metrics.homeTopPadding + metrics.verticalSpacing * 2 +
+                                         metrics.buttonHintsHeight);
     GUI.drawButtonMenu(
-        renderer, Rect{0, menuTopY, pageWidth, menuHeight}, static_cast<int>(items.size()),
-        menuSelectedIndex,
+        renderer, Rect{0, menuTopY, pageWidth, menuHeight}, static_cast<int>(items.size()), menuSelectedIndex,
         [&items](int index) -> std::string { return items[index].label; },
         [&items](int index) -> UIIcon { return items[index].icon; });
     const auto labels = mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
@@ -1007,11 +1053,9 @@ void HomeActivity::render(RenderLock&&) {
     }
 
     const char* label = kHomeMenuItems[menuSelectedIndex].label;
-    const std::string truncLabel =
-        renderer.truncatedText(UI_12_FONT_ID, label, pageWidth - 40, EpdFontFamily::BOLD);
+    const std::string truncLabel = renderer.truncatedText(UI_12_FONT_ID, label, pageWidth - 40, EpdFontFamily::BOLD);
     const int labelW = renderer.getTextWidth(UI_12_FONT_ID, truncLabel.c_str(), EpdFontFamily::BOLD);
-    renderer.drawText(UI_12_FONT_ID, (pageWidth - labelW) / 2, labelY, truncLabel.c_str(), true,
-                      EpdFontFamily::BOLD);
+    renderer.drawText(UI_12_FONT_ID, (pageWidth - labelW) / 2, labelY, truncLabel.c_str(), true, EpdFontFamily::BOLD);
 
     if (subtitle != nullptr && subtitle[0] != '\0') {
       const std::string truncSub = renderer.truncatedText(UI_10_FONT_ID, subtitle, pageWidth - 40);
@@ -1020,8 +1064,8 @@ void HomeActivity::render(RenderLock&&) {
     }
   }
   // Icon strip sizing (kHomeMenuItems / kHomeMenuCount defined above).
-  constexpr int kIconSrcSize = 32;   // raw bitmap dimensions (assets are 32×32)
-  constexpr int iconSize = 40;       // visual size; drawIconScaled resamples 32→40
+  constexpr int kIconSrcSize = 32;  // raw bitmap dimensions (assets are 32×32)
+  constexpr int iconSize = 40;      // visual size; drawIconScaled resamples 32→40
   constexpr int iconCellSize = 56;
   constexpr int sideMargin = 32;
 
@@ -1053,7 +1097,7 @@ void HomeActivity::render(RenderLock&&) {
       constexpr int kTop = 2;
       constexpr int kBottom = 28;
       constexpr int kNotchTipX = 15;
-      constexpr int kNotchTipY = 16;       // depth = 12, ~same fraction of height as before — V stays tall
+      constexpr int kNotchTipY = 16;  // depth = 12, ~same fraction of height as before — V stays tall
       constexpr int kStroke = 2;
 
       auto blitBlock = [&](int sx, int sy) {
@@ -1078,16 +1122,20 @@ void HomeActivity::render(RenderLock&&) {
       // the previous 1-px-clip subtle round).
       for (int sy = kTop; sy < kTop + kStroke; ++sy) {
         int inset = 0;
-        if (sy == kTop) inset = 2;
-        else inset = 1;
+        if (sy == kTop)
+          inset = 2;
+        else
+          inset = 1;
         fillSpan(kLeft + inset, kRight - inset, sy);
       }
       // Left and right verticals — same inset at the top two rows so they
       // don't refill the pixels we just clipped on the corner staircase.
       for (int sy = kTop; sy <= kBottom; ++sy) {
         int inset = 0;
-        if (sy == kTop) inset = 2;
-        else if (sy == kTop + 1) inset = 1;
+        if (sy == kTop)
+          inset = 2;
+        else if (sy == kTop + 1)
+          inset = 1;
         fillSpan(kLeft + inset, kLeft + kStroke - 1, sy);
         fillSpan(kRight - kStroke + 1, kRight - inset, sy);
       }

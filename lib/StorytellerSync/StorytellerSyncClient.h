@@ -5,9 +5,9 @@
 #include <string>
 
 struct StorytellerPosition {
-  std::string href;              // EPUB spine-item href, e.g. "OEBPS/chapter3.xhtml"
-  float totalProgression = 0.0f; // 0.0–1.0 whole-book position
-  uint64_t timestamp = 0;        // milliseconds since epoch (0 = use current time)
+  std::string href;               // EPUB spine-item href, e.g. "OEBPS/chapter3.xhtml"
+  float totalProgression = 0.0f;  // 0.0–1.0 whole-book position
+  uint64_t timestamp = 0;         // milliseconds since epoch (0 = use current time)
 };
 
 struct StorytellerDeviceCodeResponse {
@@ -15,8 +15,8 @@ struct StorytellerDeviceCodeResponse {
   char userCode[32];
   char verificationUri[256];
   char verificationUriComplete[512];
-  int interval;    // seconds between polls
-  int expiresIn;   // seconds until code expires
+  int interval;   // seconds between polls
+  int expiresIn;  // seconds until code expires
 };
 
 static constexpr int STORYTELLER_MAX_BOOKS = 20;
@@ -42,7 +42,7 @@ class StorytellerSyncClient {
     SERVER_ERROR,
     JSON_ERROR,
     NOT_FOUND,
-    CONFLICT,    // 409: server position is newer
+    CONFLICT,  // 409: server position is newer
     PENDING,
     SLOW_DOWN,
     EXPIRED,

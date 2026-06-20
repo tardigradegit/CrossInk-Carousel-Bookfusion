@@ -105,19 +105,17 @@ void StorytellerAuthActivity::doPoll() {
       }
       return;
 
-    case StorytellerSyncClient::EXPIRED:
-      {
-        RenderLock lock(*this);
-        state = EXPIRED;
-      }
+    case StorytellerSyncClient::EXPIRED: {
+      RenderLock lock(*this);
+      state = EXPIRED;
+    }
       requestUpdate(true);
       return;
 
-    case StorytellerSyncClient::DENIED:
-      {
-        RenderLock lock(*this);
-        state = DENIED;
-      }
+    case StorytellerSyncClient::DENIED: {
+      RenderLock lock(*this);
+      state = DENIED;
+    }
       requestUpdate(true);
       return;
 
@@ -134,11 +132,10 @@ void StorytellerAuthActivity::doPoll() {
       }
       return;
 
-    default:
-      {
-        RenderLock lock(*this);
-        state = FAILED;
-      }
+    default: {
+      RenderLock lock(*this);
+      state = FAILED;
+    }
       requestUpdate(true);
       return;
   }
@@ -200,8 +197,7 @@ void StorytellerAuthActivity::render(RenderLock&&) {
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight},
-                 tr(STR_ST_AUTH));
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_ST_AUTH));
 
   const int lineH = renderer.getLineHeight(UI_10_FONT_ID);
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;

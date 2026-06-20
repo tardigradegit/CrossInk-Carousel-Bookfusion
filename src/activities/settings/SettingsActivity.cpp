@@ -3,14 +3,13 @@
 #include <GfxRenderer.h>
 #include <Logging.h>
 
+#include "BookFusionSettingsActivity.h"
 #include "ButtonRemapActivity.h"
 #include "ClearCacheActivity.h"
+#include "CrossPointSettings.h"
 #include "FontDownloadActivity.h"
 #include "FontSelectionActivity.h"
-#include "CrossPointSettings.h"
-#include "BookFusionSettingsActivity.h"
 #include "KOReaderSettingsActivity.h"
-#include "StorytellerSettingsActivity.h"
 #include "LanguageSelectActivity.h"
 #include "MappedInputManager.h"
 #include "OpdsServerListActivity.h"
@@ -19,6 +18,7 @@
 #include "SdFirmwareUpdateActivity.h"
 #include "SettingsList.h"
 #include "StatusBarSettingsActivity.h"
+#include "StorytellerSettingsActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"

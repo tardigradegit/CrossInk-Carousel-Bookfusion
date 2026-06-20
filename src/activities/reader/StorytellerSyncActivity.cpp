@@ -43,8 +43,7 @@ StorytellerPosition crossPointToStoryteller(const std::shared_ptr<Epub>& epub, i
                                             int totalPages) {
   const int spineCount = epub->getSpineItemsCount();
   const float intraSpine = (totalPages > 0) ? static_cast<float>(pageNumber) / totalPages : 0.0f;
-  const float totalProgression =
-      (spineCount > 0) ? (spineIndex + intraSpine) / static_cast<float>(spineCount) : 0.0f;
+  const float totalProgression = (spineCount > 0) ? (spineIndex + intraSpine) / static_cast<float>(spineCount) : 0.0f;
 
   StorytellerPosition pos;
   pos.href = epub->getSpineItem(spineIndex).href;
@@ -200,8 +199,7 @@ void StorytellerSyncActivity::performUpload() {
   }
   requestUpdateAndWait();
 
-  const StorytellerPosition pos =
-      crossPointToStoryteller(epub, currentSpineIndex, currentPage, totalPagesInSpine);
+  const StorytellerPosition pos = crossPointToStoryteller(epub, currentSpineIndex, currentPage, totalPagesInSpine);
 
   const auto result = StorytellerSyncClient::setProgress(bookUuid, pos);
 
@@ -260,8 +258,7 @@ void StorytellerSyncActivity::render(RenderLock&&) {
   renderer.drawCenteredText(UI_12_FONT_ID, 15, tr(STR_ST_SYNC), true, EpdFontFamily::BOLD);
 
   if (state == NO_TOKEN) {
-    renderer.drawCenteredText(UI_10_FONT_ID, (pageHeight / 2) - 20, tr(STR_ST_NO_TOKEN_MSG), true,
-                              EpdFontFamily::BOLD);
+    renderer.drawCenteredText(UI_10_FONT_ID, (pageHeight / 2) - 20, tr(STR_ST_NO_TOKEN_MSG), true, EpdFontFamily::BOLD);
     renderer.drawCenteredText(UI_10_FONT_ID, (pageHeight / 2) + 10, tr(STR_ST_SETUP_HINT));
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
@@ -302,13 +299,11 @@ void StorytellerSyncActivity::render(RenderLock&&) {
     const int localTocIndex = epub->getTocIndexForSpineIndex(currentSpineIndex);
 
     const std::string remoteChapter =
-        (remoteTocIndex >= 0)
-            ? epub->getTocItem(remoteTocIndex).title
-            : (std::string(tr(STR_SECTION_PREFIX)) + std::to_string(remoteSpineIndex + 1));
+        (remoteTocIndex >= 0) ? epub->getTocItem(remoteTocIndex).title
+                              : (std::string(tr(STR_SECTION_PREFIX)) + std::to_string(remoteSpineIndex + 1));
     const std::string localChapter =
-        (localTocIndex >= 0)
-            ? epub->getTocItem(localTocIndex).title
-            : (std::string(tr(STR_SECTION_PREFIX)) + std::to_string(currentSpineIndex + 1));
+        (localTocIndex >= 0) ? epub->getTocItem(localTocIndex).title
+                             : (std::string(tr(STR_SECTION_PREFIX)) + std::to_string(currentSpineIndex + 1));
 
     renderer.drawText(UI_10_FONT_ID, 20, 160, tr(STR_REMOTE_LABEL), true);
     char remoteChapterStr[128];
@@ -323,8 +318,8 @@ void StorytellerSyncActivity::render(RenderLock&&) {
     snprintf(localChapterStr, sizeof(localChapterStr), "  %s", localChapter.c_str());
     renderer.drawText(UI_10_FONT_ID, 20, 295, localChapterStr);
     char localPageStr[64];
-    snprintf(localPageStr, sizeof(localPageStr), tr(STR_PAGE_TOTAL_OVERALL_FORMAT), currentPage + 1,
-             totalPagesInSpine, localProgressPct);
+    snprintf(localPageStr, sizeof(localPageStr), tr(STR_PAGE_TOTAL_OVERALL_FORMAT), currentPage + 1, totalPagesInSpine,
+             localProgressPct);
     renderer.drawText(UI_10_FONT_ID, 20, 320, localPageStr);
 
     const int optionY = 350;
@@ -361,8 +356,7 @@ void StorytellerSyncActivity::render(RenderLock&&) {
   }
 
   if (state == SYNC_FAILED) {
-    renderer.drawCenteredText(UI_10_FONT_ID, (pageHeight / 2) - 20, tr(STR_SYNC_FAILED_MSG), true,
-                              EpdFontFamily::BOLD);
+    renderer.drawCenteredText(UI_10_FONT_ID, (pageHeight / 2) - 20, tr(STR_SYNC_FAILED_MSG), true, EpdFontFamily::BOLD);
     renderer.drawCenteredText(UI_10_FONT_ID, (pageHeight / 2) + 10, statusMessage.c_str());
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

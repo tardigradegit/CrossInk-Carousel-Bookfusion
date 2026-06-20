@@ -21,8 +21,6 @@
 #include "BookFusionBookIdStore.h"
 #include "BookFusionSyncActivity.h"
 #include "BookFusionTokenStore.h"
-#include "StorytellerSyncActivity.h"
-#include "StorytellerTokenStore.h"
 #include "BookStatsActivity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -34,16 +32,18 @@
 #include "EpubReaderUtils.h"
 #include "GlobalActions.h"
 #include "KOReaderCredentialStore.h"
-#include "activities/settings/KOReaderSettingsActivity.h"
 #include "KOReaderSyncActivity.h"
 #include "MappedInputManager.h"
 #include "ProgressMapper.h"
 #include "QrDisplayActivity.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
+#include "SdCardFontGlobals.h"
+#include "StorytellerSyncActivity.h"
+#include "StorytellerTokenStore.h"
+#include "activities/settings/KOReaderSettingsActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
-#include "SdCardFontGlobals.h"
 #include "fontIds.h"
 #include "util/ScreenshotUtil.h"
 
@@ -942,10 +942,9 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
           }
         };
 
-        startActivityForResult(
-            std::make_unique<StorytellerSyncActivity>(renderer, mappedInput, epub, epub->getPath(),
-                                                      currentSpineIndex, currentPage, totalPages),
-            applySyncResult);
+        startActivityForResult(std::make_unique<StorytellerSyncActivity>(renderer, mappedInput, epub, epub->getPath(),
+                                                                         currentSpineIndex, currentPage, totalPages),
+                               applySyncResult);
       }
       break;
     }

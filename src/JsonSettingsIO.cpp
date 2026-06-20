@@ -11,9 +11,9 @@
 #include <cstring>
 #include <string>
 
+#include "BookFusionTokenStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
-#include "BookFusionTokenStore.h"
 #include "KOReaderCredentialStore.h"
 #include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
